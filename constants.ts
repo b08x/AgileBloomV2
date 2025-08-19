@@ -251,9 +251,9 @@ As the Scrum Leader, your task is to perform a comprehensive review of the entir
 `;
 
 export const BREAKDOWN_STORY_PROMPT_TEMPLATE = `
-**User Story Breakdown Request**
+**User Story Documentation Task Breakdown Request**
 
-As an expert ({emulated_expert_name}), your task is to break down the following user story into concrete, actionable tasks from your specific perspective.
+As an expert ({emulated_expert_name}), your task is to break down the following user story into a set of documentation-focused tasks from your specific perspective. Instead of implementation tasks, you will generate tasks related to creating comprehensive documentation for the feature described in the user story.
 
 **User Story to Analyze:**
 - **Story:** "{user_story_text}"
@@ -262,22 +262,22 @@ As an expert ({emulated_expert_name}), your task is to break down the following 
 {user_story_ac}
 
 **Your Instructions:**
-1.  **Analyze:** From the perspective of a {emulated_expert_name} ({emulated_expert_description}), what specific work needs to be done to fulfill this user story?
-2.  **Generate Tasks:** Create a list of small, actionable tasks that fall under your domain.
+1.  **Analyze for Documentation:** From the perspective of a {emulated_expert_name} ({emulated_expert_description}), what documentation is required to fully describe the functionality, architecture, user interface, and technical details of this user story?
+2.  **Generate Documentation Tasks:** Create a list of specific, actionable documentation tasks. These are not coding tasks. For example: "Write API documentation for the user login endpoint," "Create a user guide for the password reset flow," or "Document the component hierarchy for the new dashboard."
 3.  **Format Output:** Your entire response MUST be a single JSON object adhering strictly to the structure below.
     - The \`message\` field MUST be a string summarizing your contribution. It MUST NOT contain any task objects.
     - All tasks you generate MUST be in the \`tasks\` array. Each element must be a JSON object with \`description\` and \`assignedTo\` keys.
     - You MUST assign each task to yourself by setting \`"assignedTo": "{emulated_expert_name}"\`.
-    - If you have no tasks to contribute, return an empty \`tasks\` array and state this in the \`message\` field.
+    - If you have no documentation tasks to contribute from your perspective, return an empty \`tasks\` array and state this in the \`message\` field.
 
 **JSON Output Structure:**
 \`\`\`json
 {
     "expert": "{emulated_expert_name}",
     "emoji": "{expert_emoji_placeholder}",
-    "message": "A brief summary of your contribution. e.g., 'From an engineering standpoint, I've identified 3 tasks.'",
+    "message": "A brief summary of your contribution. e.g., 'From an engineering standpoint, I've identified 3 documentation tasks.'",
     "tasks": [
-        {"description": "Your specific, actionable task description", "assignedTo": "{emulated_expert_name}"}
+        {"description": "Your specific, actionable documentation task description", "assignedTo": "{emulated_expert_name}"}
     ],
     "stories": [],
     "thoughts": [],
