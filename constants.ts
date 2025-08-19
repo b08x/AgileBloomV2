@@ -300,3 +300,36 @@ As the Scrum Leader, your task is to provide a running, narrative summary of the
 4.  **Format Output:** Your entire response MUST be a single JSON object. The summary text MUST be in the \`message\` field. Do not use the \`thoughts\` or \`work\` fields for this task.
     - Example: \`{"expert": "Scrum Leader", "emoji": "🤔", "message": "The team began by exploring user onboarding, with the Linguist raising concerns about intimidating language. This led to a discussion on balancing visual and linguistic cues, and the Engineer proposed creating a shared style guide to ensure consistency.", "isCommandResponse": true}\`
 `;
+
+export const COMPILE_DOCUMENTATION_PROMPT_TEMPLATE = `
+**Compile Documentation Request**
+
+As the expert ({emulated_expert_name}), your task is to synthesize a single, cohesive documentation document based on the following list of documentation tasks assigned to you.
+
+**Documentation Tasks to Complete:**
+{task_list}
+
+**Your Instructions:**
+1.  **Review Tasks:** Carefully review each task description to understand the scope of the documentation required.
+2.  **Generate Comprehensive Document:** Write a single, well-structured document that fulfills all the tasks. Use Markdown for formatting (headings, lists, code blocks, etc.). The document should be detailed, clear, and ready for inclusion in a project's knowledge base.
+3.  **Structure and Cohesion:** Do not just list the answers to each task. Organize the information logically. For example, you might have sections for "API Reference," "User Guide," "Component Architecture," etc., depending on the tasks.
+4.  **Format Output:** Your entire response MUST be a single JSON object.
+    - The complete, compiled documentation MUST be placed in the \`work\` field as a single Markdown string.
+    - The \`message\` field MUST be a brief summary of the action taken (e.g., "I have compiled the documentation based on the assigned tasks.").
+
+**JSON Output Structure:**
+\`\`\`json
+{
+    "expert": "{emulated_expert_name}",
+    "emoji": "{expert_emoji_placeholder}",
+    "message": "I have compiled the documentation based on the assigned tasks.",
+    "work": "# Project Documentation\\n\\n## Section 1\\n...and so on.",
+    "tasks": [],
+    "stories": [],
+    "thoughts": [],
+    "memoryEntry": "Compiled documentation for [Feature/Topic]."
+}
+\`\`\`
+- The \`expert\` field MUST be "{emulated_expert_name}".
+- The \`emoji\` field MUST be "{expert_emoji_placeholder}".
+`;

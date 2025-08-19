@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef } from 'react';
 import useAgileBloomStore from '../store/useAgileBloomStore';
 import { getAiResponse } from '../services/aiService';
@@ -14,6 +13,7 @@ import {
     GENERATE_TASKS_FROM_CONTEXT_PROMPT,
     GENERATE_NARRATIVE_SUMMARY_PROMPT,
     BREAKDOWN_STORY_PROMPT_TEMPLATE,
+    COMPILE_DOCUMENTATION_PROMPT_TEMPLATE,
     ROLE_SYSTEM,
     ROLE_USER,
     ROLE_SCRUM_LEADER,
@@ -95,6 +95,9 @@ export const useAgileBloomChat = () => {
   const rateLimitTimeoutRef = useRef<number | null>(null);
   const autoContinueTimeoutRef = useRef<number | null>(null);
   const lastAutoContinuedMessageIdRef = useRef<string | null>(null);
+
+  // Helper to make strings safe for injection into a prompt string.
+  const escapeForPrompt = (str: string) => str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
   const getRoundRobinOrder = useCallback(() => {
     const { selectedExpertRoles } = store();
@@ -429,9 +432,9 @@ export const useAgileBloomChat = () => {
         
         let itemDescriptionForPrompt: string;
         if (storyToAnalyze) {
-            itemDescriptionForPrompt = `Type: User Story\nID: ${storyToAnalyze.id}\nStory: "${storyToAnalyze.userStory}"\nBenefit: "${storyToAnalyze.benefit}"\nAcceptance Criteria:\n- ${storyToAnalyze.acceptanceCriteria.join('\n- ')}`;
+            itemDescriptionForPrompt = `Type: User Story\nID: ${storyToAnalyze.id}\nStory: "${escapeForPrompt(storyToAnalyze.userStory)}"\nBenefit: "${escapeForPrompt(storyToAnalyze.benefit)}"\nAcceptance Criteria:\n- ${storyToAnalyze.acceptanceCriteria.map(ac => escapeForPrompt(ac)).join('\n- ')}`;
         } else { // taskToAnalyze must be defined here
-            itemDescriptionForPrompt = `Type: Task\nID: ${taskToAnalyze!.id}\nDescription: "${taskToAnalyze!.description}"\nStatus: ${taskToAnalyze!.status}${taskToAnalyze!.storyId ? `\nParent Story ID: ${taskToAnalyze!.storyId}` : ''}`;
+            itemDescriptionForPrompt = `Type: Task\nID: ${taskToAnalyze!.id}\nDescription: "${escapeForPrompt(taskToAnalyze!.description)}"\nStatus: ${taskToAnalyze!.status}${taskToAnalyze!.storyId ? `\nParent Story ID: ${taskToAnalyze!.storyId}` : ''}`;
         }
         
         const analysisPrompt = `Please perform a FISH analysis on the following item. The analysis framework is provided in your system instructions. Place the full analysis in the 'work' field of your JSON response, and provide a brief summary in the 'message' field.\n\nItem for Analysis:\n---\n${itemDescriptionForPrompt}\n---`;
@@ -485,7 +488,7 @@ export const useAgileBloomChat = () => {
             
             // This is still valid as it can be triggered by a card click
             updateTrackedQuestionStatus(questionToDiscuss.id, QuestionStatus.Addressing);
-            const discussionPrompt = `Let's focus the discussion on this specific question that was raised earlier by ${questionToDiscuss.expertRole}. Please provide your perspective. Question: "${questionToDiscuss.text}"`;
+            const discussionPrompt = `Let's focus the discussion on this specific question that was raised earlier by ${questionToDiscuss.expertRole}. Please provide your perspective. Question: "${escapeForPrompt(questionToDiscuss.text)}"`;
             return { userMessageText, aiInstructionText: discussionPrompt, action: 'round_robin_ai_response' };
         }
         
@@ -502,7 +505,7 @@ export const useAgileBloomChat = () => {
         }
         
         const promptContent = "Please review the following 'Addressed' discussion points and generate formal user stories for the product backlog. Each story should have a clear user, action, and benefit, along with initial acceptance criteria. Present this as a markdown table with columns: 'ID', 'User Story', 'Benefit/Value', and 'Initial Acceptance Criteria'.\n\n" +
-            addressedQuestions.map(q => `- ID ${q.id.substring(0, ID_PREFIX_LENGTH_QUESTIONS)}: "${q.text}" (raised by ${q.expertRole})`).join('\n');
+            addressedQuestions.map(q => `- ID ${q.id.substring(0, ID_PREFIX_LENGTH_QUESTIONS)}: "${escapeForPrompt(q.text)}" (raised by ${q.expertRole})`).join('\n');
 
         return { userMessageText, aiInstructionText: promptContent, action: 'single_ai_response', targetExpert: ROLE_SCRUM_LEADER };
       }
@@ -602,9 +605,9 @@ export const useAgileBloomChat = () => {
                         const breakdownPrompt = BREAKDOWN_STORY_PROMPT_TEMPLATE
                             .replace(/{emulated_expert_name}/g, expert.name)
                             .replace(/{emulated_expert_description}/g, expert.description)
-                            .replace(/{user_story_text}/g, storyToBreakDown.userStory.replace(/"/g, '\\"'))
-                            .replace(/{user_story_benefit}/g, storyToBreakDown.benefit.replace(/"/g, '\\"'))
-                            .replace(/{user_story_ac}/g, storyToBreakDown.acceptanceCriteria.map(ac => `- ${ac.replace(/"/g, '\\"')}`).join('\\n'))
+                            .replace(/{user_story_text}/g, escapeForPrompt(storyToBreakDown.userStory))
+                            .replace(/{user_story_benefit}/g, escapeForPrompt(storyToBreakDown.benefit))
+                            .replace(/{user_story_ac}/g, storyToBreakDown.acceptanceCriteria.map(ac => `- ${escapeForPrompt(ac)}`).join('\\n'))
                             .replace(/{expert_emoji_placeholder}/g, expert.emoji);
 
                         const aiResponse = await getAiResponse(
@@ -643,7 +646,7 @@ export const useAgileBloomChat = () => {
   }, [
       isLoading, topic, addMessage, addErrorMessage, setLoading, setError, 
       toggleHelpModal, storeClearChat, checkAndApplyRateLimit, addUserMessageTimestamp, 
-      processAndAddAiResponse, getRoundRobinOrder, updateNarrativeSummary
+      processAndAddAiResponse, getRoundRobinOrder, updateNarrativeSummary, escapeForPrompt
   ]);
   
   const initiateDiscussion = (newTopic: string, initialContext: string, selectedRoles: ExpertRole[]) => {
@@ -696,6 +699,48 @@ export const useAgileBloomChat = () => {
     }
   }, [isLoading, topic, processAndAddAiResponse]);
 
+  const compileDocumentationForExpert = useCallback(async (expertRole: ExpertRole) => {
+    if (isLoading || !topic) {
+        addErrorMessage("Cannot compile documentation without an active discussion topic.");
+        return;
+    }
+
+    const { trackedTasks, experts, discussion, memoryContext } = useAgileBloomStore.getState();
+    const tasksForExpert = trackedTasks.filter(t => t.assignedTo === expertRole && (t.status === TaskStatus.ToDo || t.status === TaskStatus.InProgress));
+
+    if (tasksForExpert.length === 0) {
+        addErrorMessage(`No active tasks found for ${expertRole} to compile documentation from.`);
+        return;
+    }
+
+    setLoading(true);
+    try {
+        const expert = experts[expertRole];
+        const taskList = tasksForExpert.map(t => `- ${t.description}`).join('\n');
+
+        const compilePrompt = COMPILE_DOCUMENTATION_PROMPT_TEMPLATE
+            .replace(/{emulated_expert_name}/g, expert.name)
+            .replace(/{expert_emoji_placeholder}/g, expert.emoji)
+            .replace(/{task_list}/g, taskList);
+
+        const aiResponse = await getAiResponse(
+            topic,
+            compilePrompt,
+            discussion,
+            0, // No thoughts needed
+            memoryContext,
+            expertRole,
+        );
+        processAndAddAiResponse(aiResponse, expertRole);
+    } catch(e) {
+        const err = e as Error;
+        console.error("Error compiling documentation:", err);
+        addErrorMessage(`Failed to compile documentation: ${err.message}`);
+    } finally {
+        setLoading(false);
+    }
+  }, [isLoading, topic, processAndAddAiResponse]);
+
 
   const updateQuestionStatusAndPotentiallyGenerateActions = useCallback(async (questionId: string, newStatus: QuestionStatus) => {
     if (isLoading) return;
@@ -712,7 +757,7 @@ export const useAgileBloomChat = () => {
         // Trigger story generation for this specific question
         const question = useAgileBloomStore.getState().trackedQuestions.find(q => q.id === questionId);
         if (question) {
-            const prompt = `A key discussion point has been marked 'Addressed'. Please generate a formal user story for the product backlog based on this point. Present it as a markdown table with columns: 'ID', 'User Story', 'Benefit/Value', and 'Initial Acceptance Criteria'.\n\n- ID ${question.id.substring(0, ID_PREFIX_LENGTH_QUESTIONS)}: "${question.text}" (raised by ${question.expertRole})`;
+            const prompt = `A key discussion point has been marked 'Addressed'. Please generate a formal user story for the product backlog based on this point. Present it as a markdown table with columns: 'ID', 'User Story', 'Benefit/Value', and 'Initial Acceptance Criteria'.\n\n- ID ${question.id.substring(0, ID_PREFIX_LENGTH_QUESTIONS)}: "${escapeForPrompt(question.text)}" (raised by ${question.expertRole})`;
             
             setLoading(true);
             try {
@@ -729,7 +774,7 @@ export const useAgileBloomChat = () => {
         }
     }
     // Dismissed and Open statuses require no further AI action.
-  }, [isLoading, updateTrackedQuestionStatus, sendMessage, topic, processAndAddAiResponse]);
+  }, [isLoading, updateTrackedQuestionStatus, sendMessage, topic, processAndAddAiResponse, escapeForPrompt]);
 
   // Effect for rate limiting check
   useEffect(() => {
@@ -788,6 +833,7 @@ export const useAgileBloomChat = () => {
     initiateDiscussion,
     sendMessage,
     generateTasksFromContext,
+    compileDocumentationForExpert,
     updateQuestionStatusAndPotentiallyGenerateActions,
     handleTaskUpdate,
   };

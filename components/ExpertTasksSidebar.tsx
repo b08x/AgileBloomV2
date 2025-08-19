@@ -1,10 +1,9 @@
-
 import React, { useState, useMemo } from 'react';
 import useAgileBloomStore from '../store/useAgileBloomStore';
 import { useAgileBloomChat } from '../hooks/useAgileBloomChat';
 import { TaskStatus, ExpertRole, TaskPriority } from '../types';
 import { TaskItemCard } from './TaskItemCard';
-import { ListChecks, BrainCircuit, ListTodo, ClipboardList } from 'lucide-react';
+import { ListChecks, BrainCircuit, ListTodo, ClipboardList, BookText } from 'lucide-react';
 
 export const ExpertTasksSidebar: React.FC = () => {
     const { 
@@ -16,7 +15,7 @@ export const ExpertTasksSidebar: React.FC = () => {
         experts,
     } = useAgileBloomStore();
     
-    const { generateTasksFromContext, sendMessage, handleTaskUpdate } = useAgileBloomChat();
+    const { generateTasksFromContext, sendMessage, handleTaskUpdate, compileDocumentationForExpert } = useAgileBloomChat();
 
     const tabs: Array<{ label: string; value: ExpertRole | 'Unassigned', emoji: React.ReactNode }> = useMemo(() => [
         ...selectedExpertRoles.map(role => ({
@@ -59,15 +58,26 @@ export const ExpertTasksSidebar: React.FC = () => {
                         <ListChecks className="text-[#e2a32d]" size={20} />
                         <h2 className="text-lg font-semibold text-[#e2a32d]">Current Tasks</h2>
                     </div>
-                    <button
-                        onClick={generateTasksFromContext}
-                        disabled={isLoading || !topic}
-                        className="flex items-center gap-2 px-3 py-1.5 text-xs text-[#e2a32d] bg-[#e2a32d]/20 hover:bg-[#e2a32d]/30 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={!topic ? "Start a discussion first" : "Generate a task backlog based on the current discussion context."}
-                    >
-                        <BrainCircuit size={14} />
-                        Generate Backlog
-                    </button>
+                    <div className="flex items-center gap-2">
+                         <button
+                            onClick={() => compileDocumentationForExpert(activeTab as ExpertRole)}
+                            disabled={isLoading || !topic || activeTab === 'Unassigned' || filteredTasks.length === 0}
+                            className="flex items-center gap-2 px-3 py-1.5 text-xs text-green-300 bg-green-900/40 hover:bg-green-800/60 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={!topic ? "Start a discussion first" : activeTab === 'Unassigned' ? "Cannot compile for unassigned tasks" : filteredTasks.length === 0 ? `No tasks for ${activeTab}` : `Ask ${activeTab} to compile documentation from their tasks.`}
+                        >
+                            <BookText size={14} />
+                            Compile Docs
+                        </button>
+                        <button
+                            onClick={generateTasksFromContext}
+                            disabled={isLoading || !topic}
+                            className="flex items-center gap-2 px-3 py-1.5 text-xs text-[#e2a32d] bg-[#e2a32d]/20 hover:bg-[#e2a32d]/30 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={!topic ? "Start a discussion first" : "Generate a task backlog based on the current discussion context."}
+                        >
+                            <BrainCircuit size={14} />
+                            Generate Backlog
+                        </button>
+                    </div>
                 </div>
             </header>
             
