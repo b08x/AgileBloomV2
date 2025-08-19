@@ -97,7 +97,11 @@ export const useAgileBloomChat = () => {
   const lastAutoContinuedMessageIdRef = useRef<string | null>(null);
 
   // Helper to make strings safe for injection into a prompt string.
-  const escapeForPrompt = (str: string) => str.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  // This uses JSON.stringify to handle all control characters, quotes, etc.
+  const escapeForPrompt = (str: string) => {
+    if (!str) return "";
+    return JSON.stringify(str).slice(1, -1);
+  };
 
   const getRoundRobinOrder = useCallback(() => {
     const { selectedExpertRoles } = store();
@@ -604,7 +608,7 @@ export const useAgileBloomChat = () => {
                         const expert = experts[expertRole];
                         const breakdownPrompt = BREAKDOWN_STORY_PROMPT_TEMPLATE
                             .replace(/{emulated_expert_name}/g, expert.name)
-                            .replace(/{emulated_expert_description}/g, expert.description)
+                            .replace(/{emulated_expert_description}/g, escapeForPrompt(expert.description))
                             .replace(/{user_story_text}/g, escapeForPrompt(storyToBreakDown.userStory))
                             .replace(/{user_story_benefit}/g, escapeForPrompt(storyToBreakDown.benefit))
                             .replace(/{user_story_ac}/g, storyToBreakDown.acceptanceCriteria.map(ac => `- ${escapeForPrompt(ac)}`).join('\\n'))
@@ -716,7 +720,7 @@ export const useAgileBloomChat = () => {
     setLoading(true);
     try {
         const expert = experts[expertRole];
-        const taskList = tasksForExpert.map(t => `- ${t.description}`).join('\n');
+        const taskList = tasksForExpert.map(t => `- ${escapeForPrompt(t.description)}`).join('\\n');
 
         const compilePrompt = COMPILE_DOCUMENTATION_PROMPT_TEMPLATE
             .replace(/{emulated_expert_name}/g, expert.name)

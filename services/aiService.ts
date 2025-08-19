@@ -9,6 +9,14 @@ import useAgileBloomStore from '../store/useAgileBloomStore';
 
 // --- Helper Functions ---
 
+const escapeForJsonString = (str: string | null | undefined): string => {
+  if (!str) return "";
+  // JSON.stringify escapes quotes, backslashes, newlines, and all control characters.
+  // We slice to remove the outer quotes that stringify adds.
+  return JSON.stringify(str).slice(1, -1);
+};
+
+
 function buildSystemPrompt(
   currentTopic: string | null,
   discussionHistory: DiscussionMessage[],
@@ -25,12 +33,12 @@ function buildSystemPrompt(
     let specificTaskInstructions = "";
     
     const activeExperts = selectedExpertRoles.map(role => experts[role]).filter(Boolean);
-    const expertListForPrompt = activeExperts.map(expert => `- ${expert.name} (${expert.emoji}): ${expert.description}`).join('\n');
+    const expertListForPrompt = activeExperts.map(expert => `- ${escapeForJsonString(expert.name)} (${expert.emoji}): ${escapeForJsonString(expert.description)}`).join('\n');
 
     if (emulateExpertAs) {
         const expertToEmulate = experts[emulateExpertAs];
-        emulationInstructions = `\nYou are currently emulating: ${expertToEmulate.name} (${expertToEmulate.emoji}). Your response MUST be from this expert's perspective.`;
-        responsePersonaInstruction = `You MUST respond as ${expertToEmulate.name}. The "expert" field in your JSON output MUST be "${expertToEmulate.name}".`;
+        emulationInstructions = `\nYou are currently emulating: ${escapeForJsonString(expertToEmulate.name)} (${expertToEmulate.emoji}). Your response MUST be from this expert's perspective.`;
+        responsePersonaInstruction = `You MUST respond as ${escapeForJsonString(expertToEmulate.name)}. The "expert" field in your JSON output MUST be "${escapeForJsonString(expertToEmulate.name)}".`;
 
         if (emulateExpertAs === ROLE_SCRUM_LEADER) {
             if (currentUserMessageOrCommand.toLowerCase().includes("perform a fish analysis on the following item")) {
@@ -42,23 +50,23 @@ function buildSystemPrompt(
     }
 
     const formattedMemory = memoryContext.length > 0
-        ? memoryContext.map(entry => `- ${entry}`).join('\n')
+        ? memoryContext.map(entry => `- ${escapeForJsonString(entry)}`).join('\n')
         : "No key points remembered yet.";
 
     const additionalContextSection = (initialContext && initialContext.trim() !== '')
-        ? `\n--- Start of Additional Context ---\nThis initial context was provided by the user to set the stage for the entire discussion:\n\n${initialContext.trim()}\n\n--- End of Additional Context ---\n`
+        ? `\n--- Start of Additional Context ---\nThis initial context was provided by the user to set the stage for the entire discussion:\n\n${escapeForJsonString(initialContext.trim())}\n\n--- End of Additional Context ---\n`
         : "";
     
     const assignedTasksSection = (assignedTasksContext && assignedTasksContext.trim() !== '')
-        ? `\n--- Start of Your Assigned Tasks ---\nThis is a list of tasks currently assigned to you. When responding to commands like /show-work, please focus your response on these tasks.\n\n${assignedTasksContext.trim()}\n--- End of Your Assigned Tasks ---\n`
+        ? `\n--- Start of Your Assigned Tasks ---\nThis is a list of tasks currently assigned to you. When responding to commands like /show-work, please focus your response on these tasks.\n\n${escapeForJsonString(assignedTasksContext.trim())}\n--- End of Your Assigned Tasks ---\n`
         : "";
 
     const historyFormatter = (discussion: DiscussionMessage[], maxTurns = 10): string => {
-        return discussion.slice(-maxTurns).map(msg => `${msg.expert.name} (${msg.expert.emoji}): ${msg.text}${msg.work ? `\nWORK:\n${msg.work}` : ''}${msg.searchCitations && msg.searchCitations.length > 0 ? `\n(Sources: ${msg.searchCitations.map(c => c.title).join(', ')})` : ''}`).join('\n\n');
+        return discussion.slice(-maxTurns).map(msg => `${escapeForJsonString(msg.expert.name)} (${msg.expert.emoji}): ${escapeForJsonString(msg.text)}${msg.work ? `\nWORK:\n${escapeForJsonString(msg.work)}` : ''}${msg.searchCitations && msg.searchCitations.length > 0 ? `\n(Sources: ${escapeForJsonString(msg.searchCitations.map(c => c.title).join(', '))})` : ''}`).join('\n\n');
     }
 
     return INITIAL_SYSTEM_PROMPT_TEMPLATE
-        .replace('{input_topic}', currentTopic || "No topic set yet. Await user to set a topic with /topic command.")
+        .replace('{input_topic}', escapeForJsonString(currentTopic) || "No topic set yet. Await user to set a topic with /topic command.")
         .replace(new RegExp('{num_thoughts}', 'g'), String(numThoughts))
         .replace('{history}', historyFormatter(discussionHistory))
         .replace('{{emulation_instructions}}', emulationInstructions)
