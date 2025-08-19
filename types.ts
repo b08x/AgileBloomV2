@@ -6,6 +6,14 @@ export enum AiProvider {
   OpenRouter = "OpenRouter",
 }
 
+export interface AIConfig {
+  provider: AiProvider;
+  modelId: string;
+  params: Record<string, any>;
+  apiKeys: Partial<Record<AiProvider, string>>;
+  useGeminiPreprocessing?: boolean;
+}
+
 export interface ModelParameter {
   id: 'temperature' | 'topP' | 'topK' | 'maxLength' | 'thinkingBudget';
   name: string;
@@ -18,13 +26,14 @@ export interface ModelParameter {
 
 
 export interface AIModelConfig {
-  id: string; // e.g., 'gemini-2.5-flash-preview-04-17'
+  id: string; // e.g., 'gemini-2.5-flash'
   name: string; // e.g., 'Gemini 2.5 Flash'
   provider: AiProvider;
   parameters: ModelParameter[];
   supportsVision: boolean;
-  supportsSearch: boolean; // Gemini-specific
+  supportsSearch: boolean; 
   description: string;
+  strengths: string[];
 }
 
 
@@ -173,20 +182,15 @@ export interface TrackedStory {
   fromQuestionId?: string; // Optional link back to the question it came from
 }
 
+export type ApiKeyStatusValue = 'unverified' | 'valid' | 'invalid' | 'ratelimited';
+export type ApiKeyStatus = Record<string, ApiKeyStatusValue>;
 
-// Renamed from SupportedModel to avoid confusion
-export interface DEPRECATED_SupportedModel {
-  id: string;
-  name: string;
-  provider: AiProvider;
-  description: string;
-  supportsSearch: boolean;
-}
-
-export interface AIConfig {
+export interface Settings {
+    topic: string;
+    context: string;
     provider: AiProvider;
-    modelId: string;
-    params: Record<string, any>;
-    apiKeys: Partial<Record<AiProvider, string>>;
-    useGeminiPreprocessing?: boolean;
+    model: string;
+    apiKey: Partial<Record<AiProvider, string>>;
+    parameters: Record<string, any>;
+    selectedRoles: ExpertRole[];
 }

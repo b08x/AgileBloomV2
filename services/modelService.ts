@@ -1,6 +1,12 @@
-import { AIModelConfig, AiProvider } from '../types';
+import { AIModelConfig, AiProvider, Settings } from '../types';
 
-// This data is moved from the old constants/providerConfig.ts
+export const PROVIDERS: Record<AiProvider, { name: string; website: string; logo: string; }> = {
+    [AiProvider.Google]: { name: "Google", website: "https://aistudio.google.com/", logo: "💎" },
+    [AiProvider.Mistral]: { name: "Mistral", website: "https://mistral.ai/", logo: "⚡️" },
+    [AiProvider.OpenAI]: { name: "OpenAI", website: "https://openai.com/", logo: "🤖" },
+    [AiProvider.OpenRouter]: { name: "OpenRouter", website: "https://openrouter.ai/", logo: "🔄" },
+};
+
 const ALL_MODELS_DB: AIModelConfig[] = [
     // --- Google Gemini Models ---
     { 
@@ -10,6 +16,7 @@ const ALL_MODELS_DB: AIModelConfig[] = [
         description: 'A fast, versatile model with Google Search and a configurable thinking budget for balancing latency and quality.', 
         supportsSearch: true,
         supportsVision: true,
+        strengths: ["Speed & Low Latency", "Google Search Grounding", "Vision Capabilities", "Cost-Effective"],
         parameters: [
             { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 1, step: 0.05, defaultValue: 0.7 },
             { id: 'topP', name: 'Top-P', type: 'slider', min: 0, max: 1, step: 0.05, defaultValue: 0.95 },
@@ -26,6 +33,7 @@ const ALL_MODELS_DB: AIModelConfig[] = [
         description: 'Top-tier reasoning capacities, for complex, specialized tasks.', 
         supportsSearch: false,
         supportsVision: false,
+        strengths: ["Complex Reasoning", "Code Generation", "Multilingual Support"],
         parameters: [
             { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 1, step: 0.05, defaultValue: 0.7 },
         ]
@@ -37,6 +45,7 @@ const ALL_MODELS_DB: AIModelConfig[] = [
         description: 'A balanced model suitable for a variety of tasks.', 
         supportsSearch: false,
         supportsVision: false,
+        strengths: ["Balanced Performance", "Good for General Tasks", "Efficient"],
         parameters: [
             { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 1, step: 0.05, defaultValue: 0.7 },
         ]
@@ -49,6 +58,7 @@ const ALL_MODELS_DB: AIModelConfig[] = [
         description: 'The latest and most advanced model from OpenAI, with excellent vision capabilities.',
         supportsSearch: false,
         supportsVision: true,
+        strengths: ["Advanced Vision", "Strong General Reasoning", "State-of-the-Art Performance"],
         parameters: [
             { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 2, step: 0.1, defaultValue: 0.7 },
             { id: 'topP', name: 'Top-P', type: 'slider', min: 0, max: 1, step: 0.05, defaultValue: 1 },
@@ -61,6 +71,7 @@ const ALL_MODELS_DB: AIModelConfig[] = [
         description: 'A fast and capable model, optimized for dialogue and general tasks.',
         supportsSearch: false,
         supportsVision: false,
+        strengths: ["Fast Response Time", "Cost-Effective", "Good for Chat Applications"],
         parameters: [
             { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 2, step: 0.1, defaultValue: 0.7 },
             { id: 'topP', name: 'Top-P', type: 'slider', min: 0, max: 1, step: 0.05, defaultValue: 1 },
@@ -71,20 +82,22 @@ const ALL_MODELS_DB: AIModelConfig[] = [
         id: 'openai/gpt-4o-mini',
         name: 'GPT-4o Mini (via OpenRouter)',
         provider: AiProvider.OpenRouter,
-        description: 'GPT-4o proxied through OpenRouter.',
+        description: 'A smaller, faster version of GPT-4o, available through OpenRouter.',
         supportsSearch: false,
         supportsVision: true,
+        strengths: ["Speed", "Lower Cost", "Vision Support"],
         parameters: [
              { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 2, step: 0.1, defaultValue: 0.7 },
         ]
     },
     {
         id: 'google/gemma-3-27b-it',
-        name: 'Gemini Gemma 3-27b-it (via OpenRouter)',
+        name: 'Gemma 3 27B (via OpenRouter)',
         provider: AiProvider.OpenRouter,
-        description: 'Gemini 1.5 Flash proxied through OpenRouter.',
+        description: 'Google\'s powerful new open model, available through OpenRouter.',
         supportsSearch: false,
         supportsVision: true,
+        strengths: ["Open Model", "Strong Performance", "High Throughput"],
         parameters: [
              { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 2, step: 0.1, defaultValue: 0.7 },
         ]
@@ -94,8 +107,7 @@ const ALL_MODELS_DB: AIModelConfig[] = [
 const modelCache = new Map<AiProvider, AIModelConfig[]>();
 
 /**
- * Fetches available models for a given provider, with caching.
- * This is now a synchronous operation.
+ * Fetches available models for a given provider. Synchronous as it's from a static list.
  */
 export const fetchModelsForProvider = (provider: AiProvider): AIModelConfig[] => {
     if (modelCache.has(provider)) {
@@ -110,8 +122,23 @@ export const fetchModelsForProvider = (provider: AiProvider): AIModelConfig[] =>
 
 /**
  * Gets a single model's configuration by its ID.
- * This is now a synchronous operation.
  */
 export const getModelConfigById = (modelId: string): AIModelConfig | undefined => {
     return ALL_MODELS_DB.find(model => model.id === modelId);
+};
+
+/**
+ * Fetches a list of available models dynamically from a provider.
+ * This is a placeholder for a real implementation.
+ */
+export const fetchAvailableModels = async (settings: Settings): Promise<string[]> => {
+  console.log("Fetching dynamic models for", settings.provider);
+  // In a real app, this would make an API call to the provider's /models endpoint.
+  // For now, we'll simulate a delay and return the statically defined models for that provider.
+  await new Promise(resolve => setTimeout(resolve, 1000)); 
+  const staticModels = fetchModelsForProvider(settings.provider);
+  if (staticModels.length === 0) {
+    throw new Error(`No models configured for ${settings.provider}.`);
+  }
+  return staticModels.map(m => m.id);
 };

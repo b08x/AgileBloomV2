@@ -48,7 +48,7 @@ export async function validateApiKey(provider: AiProvider, apiKey: string): Prom
             dangerouslyAllowBrowser: true 
         });
          await openrouter.chat.completions.create({
-            model: 'google/gemini-flash-1.5',
+            model: 'google/gemma-3-27b-it',
             messages: [{ role: 'user', content: 'test' }],
             max_tokens: 2,
         });

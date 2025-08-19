@@ -94,7 +94,7 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
 
             if (errorMessage.includes('quota')) {
                 console.error("Quota exceeded error detected. Halting further API requests.");
-                useAgileBloomStore.getState().setQuotaExceeded(true);
+                // This state will be handled at the component level now
                 throw new Error("Failed to call the AI API, quota exceeded. Please try again later.");
             }
             if (retries === MAX_RETRIES) {
@@ -152,7 +152,7 @@ async function generateGeminiResponse(
     geminiConfig.maxOutputTokens = maxLength;
   }
 
-  if (thinkingBudget !== undefined && modelId === 'gemini-2.5-flash') {
+  if (thinkingBudget !== undefined && modelId.includes('flash')) {
     geminiConfig.thinkingConfig = { thinkingBudget: thinkingBudget };
   }
 
@@ -278,16 +278,13 @@ export async function getAiResponse(
   assignedTasksContext?: string | null
 ): Promise<GeminiResponseJson> {
   
-    const { aiConfig, isQuotaExceeded, experts } = useAgileBloomStore.getState();
+    const { settings, experts } = useAgileBloomStore.getState();
 
-    if (isQuotaExceeded) {
-        throw new Error("All AI requests are currently halted due to an API quota issue.");
-    }
-    if (!aiConfig) {
+    if (!settings) {
         throw new Error("AI configuration is not set. Please configure the AI provider on the setup page.");
     }
 
-    const { provider, modelId, apiKeys, params } = aiConfig;
+    const { provider, model: modelId, apiKey: apiKeys, parameters: params } = settings;
     const apiKey = apiKeys[provider];
 
     if (!apiKey) {

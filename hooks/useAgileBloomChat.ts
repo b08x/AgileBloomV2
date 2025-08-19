@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import useAgileBloomStore from '../store/useAgileBloomStore';
 import { getAiResponse } from '../services/aiService';
-import { ExpertRole, GeminiResponseJson, CommandHandlerResult, UploadedFile, SearchCitation, DiscussionMessage, TrackedQuestion, QuestionStatus, TaskStatus, TrackedTask, GeminiGeneratedTask, GeminiGeneratedStory, StoryStatus, StoryPriority } from '../types';
+import { ExpertRole, GeminiResponseJson, CommandHandlerResult, UploadedFile, SearchCitation, DiscussionMessage, TrackedQuestion, QuestionStatus, TaskStatus, TrackedTask, GeminiGeneratedTask, GeminiGeneratedStory, StoryStatus, Settings } from '../types';
 import { 
     DEFAULT_EXPERTS, 
     AVAILABLE_COMMANDS,
@@ -653,22 +653,22 @@ export const useAgileBloomChat = () => {
       processAndAddAiResponse, getRoundRobinOrder, updateNarrativeSummary, escapeForPrompt
   ]);
   
-  const initiateDiscussion = (newTopic: string, initialContext: string, selectedRoles: ExpertRole[]) => {
+  const initiateDiscussion = (settings: Settings) => {
       storeClearChat();
       const { setTopic, setSelectedExpertRoles } = useAgileBloomStore.getState();
-      setTopic(newTopic);
-      setSelectedExpertRoles(selectedRoles);
+      setTopic(settings.topic);
+      setSelectedExpertRoles(settings.selectedRoles);
       addMessage({
           expertName: ROLE_SYSTEM,
-          text: `Discussion started on topic: "${newTopic}" with experts: ${selectedRoles.join(', ')}.`,
+          text: `Discussion started on topic: "${settings.topic}" with experts: ${settings.selectedRoles.join(', ')}.`,
           isCommandResponse: true,
       });
 
-      if (initialContext.trim() !== '') {
+      if (settings.context.trim() !== '') {
           // Add context but don't trigger AI response yet, it will be included in the first user command
           addMessage({
               expertName: ROLE_SYSTEM,
-              text: `The following context was provided:\n\n---\n${initialContext}\n---`,
+              text: `The following context was provided:\n\n---\n${settings.context}\n---`,
               isCommandResponse: true
           });
       }

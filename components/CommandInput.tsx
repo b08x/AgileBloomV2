@@ -12,12 +12,11 @@ export const CommandInput: React.FC = () => {
   const { sendMessage } = useAgileBloomChat();
   const { 
     isLoading, 
-    aiConfig,
+    settings,
     isRateLimited, 
     uploadedFile,
     clearUploadedFile,
     isAutoModeEnabled,
-    isQuotaExceeded,
   } = useAgileBloomStore();
   
   const [suggestions, setSuggestions] = useState<Command[]>([]);
@@ -25,8 +24,8 @@ export const CommandInput: React.FC = () => {
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const isApiConfigError = !aiConfig;
-  const isInputDisabled = isApiConfigError || isLoading || isRateLimited || isQuotaExceeded;
+  const isApiConfigError = !settings;
+  const isInputDisabled = isApiConfigError || isLoading || isRateLimited;
   const isSubmitDisabled = isInputDisabled || (!inputText.trim() && !uploadedFile);
 
   const handleSubmit = (e?: React.FormEvent) => {
@@ -105,8 +104,6 @@ export const CommandInput: React.FC = () => {
   let placeholderText = "Type message or /command (e.g., /ask)... Upload image, .txt, .md";
   if (isLoading) {
     placeholderText = "AI is thinking...";
-  } else if (isQuotaExceeded) {
-    placeholderText = "API quota exceeded. Requests are halted.";
   } else if (isApiConfigError) {
     placeholderText = "Session not configured. Please refresh.";
   } else if (isRateLimited) {

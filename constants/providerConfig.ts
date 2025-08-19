@@ -1,3 +1,4 @@
+
 import { AIModelConfig, AiProvider } from '../types';
 
 export const AVAILABLE_MODELS: AIModelConfig[] = [
@@ -9,6 +10,7 @@ export const AVAILABLE_MODELS: AIModelConfig[] = [
         description: 'A fast and versatile model with Google Search, suitable for a wide range of applications.', 
         supportsSearch: true,
         supportsVision: true,
+        strengths: ["Speed & Low Latency", "Google Search Grounding", "Vision Capabilities", "Cost-Effective"],
         parameters: [
             { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 1, step: 0.05, defaultValue: 0.7 },
             { id: 'topP', name: 'Top-P', type: 'slider', min: 0, max: 1, step: 0.05, defaultValue: 0.95 },
@@ -23,6 +25,7 @@ export const AVAILABLE_MODELS: AIModelConfig[] = [
         description: 'Top-tier reasoning capacities, for complex, specialized tasks.', 
         supportsSearch: false,
         supportsVision: false,
+        strengths: ["Complex Reasoning", "Code Generation", "Multilingual Support"],
         parameters: [
             { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 1, step: 0.05, defaultValue: 0.7 },
         ]
@@ -34,6 +37,7 @@ export const AVAILABLE_MODELS: AIModelConfig[] = [
         description: 'A balanced model suitable for a variety of tasks.', 
         supportsSearch: false,
         supportsVision: false,
+        strengths: ["Balanced Performance", "Good for General Tasks", "Efficient"],
         parameters: [
             { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 1, step: 0.05, defaultValue: 0.7 },
         ]
@@ -46,6 +50,7 @@ export const AVAILABLE_MODELS: AIModelConfig[] = [
         description: 'The latest and most advanced model from OpenAI, with excellent vision capabilities.',
         supportsSearch: false,
         supportsVision: true,
+        strengths: ["Advanced Vision", "Strong General Reasoning", "State-of-the-Art Performance"],
         parameters: [
             { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 2, step: 0.1, defaultValue: 0.7 },
             { id: 'topP', name: 'Top-P', type: 'slider', min: 0, max: 1, step: 0.05, defaultValue: 1 },
@@ -58,6 +63,7 @@ export const AVAILABLE_MODELS: AIModelConfig[] = [
         description: 'A fast and capable model, optimized for dialogue and general tasks.',
         supportsSearch: false,
         supportsVision: false,
+        strengths: ["Fast Response Time", "Cost-Effective", "Good for Chat Applications"],
         parameters: [
             { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 2, step: 0.1, defaultValue: 0.7 },
             { id: 'topP', name: 'Top-P', type: 'slider', min: 0, max: 1, step: 0.05, defaultValue: 1 },
@@ -71,6 +77,7 @@ export const AVAILABLE_MODELS: AIModelConfig[] = [
         description: 'GPT-4o proxied through OpenRouter.',
         supportsSearch: false,
         supportsVision: true,
+        strengths: ["Speed", "Lower Cost", "Vision Support"],
         parameters: [
              { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 2, step: 0.1, defaultValue: 0.7 },
         ]
@@ -82,6 +89,7 @@ export const AVAILABLE_MODELS: AIModelConfig[] = [
         description: 'Gemini 1.5 Flash proxied through OpenRouter.',
         supportsSearch: false,
         supportsVision: true,
+        strengths: ["Open Model", "Strong Performance", "High Throughput"],
         parameters: [
              { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 2, step: 0.1, defaultValue: 0.7 },
         ]

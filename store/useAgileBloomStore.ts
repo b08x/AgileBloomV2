@@ -1,6 +1,6 @@
 
 import {create} from 'zustand';
-import { DiscussionMessage, ExpertRole, UploadedFile, TrackedQuestion, QuestionStatus, TrackedTask, TaskStatus, Expert, TrackedStory, StoryStatus, StoryPriority, AIConfig } from '../types';
+import { DiscussionMessage, ExpertRole, UploadedFile, TrackedQuestion, QuestionStatus, TrackedTask, TaskStatus, Expert, TrackedStory, StoryStatus, StoryPriority, Settings } from '../types';
 import { DEFAULT_EXPERTS, DEFAULT_NUM_THOUGHTS, MAX_MEMORY_ENTRIES, DEFAULT_AUTO_MODE_DELAY_SECONDS, ROLE_SYSTEM, ROLE_USER, ROLE_SCRUM_LEADER } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -26,6 +26,7 @@ interface AgileBloomState {
   isHelpModalOpen: boolean;
   userMessageTimestamps: number[];
   isRateLimited: boolean;
+  isQuotaExceeded: boolean;
   memoryContext: string[];
   codebaseContext: string | null;
   uploadedFile: UploadedFile | null;
@@ -37,9 +38,7 @@ interface AgileBloomState {
   isAutoModeEnabled: boolean;
   autoModeDelaySeconds: number;
   
-  aiConfig: AIConfig | null;
-
-  isQuotaExceeded: boolean;
+  settings: Settings | null;
 
   narrativeSummary: string;
   isSummaryLoading: boolean;
@@ -58,6 +57,7 @@ interface AgileBloomState {
   toggleHelpModal: () => void;
   addUserMessageTimestamp: (timestamp: number) => void;
   setRateLimitedStatus: (isLimited: boolean) => void;
+  setQuotaExceeded: (isExceeded: boolean) => void;
   addMemoryEntry: (entry: string) => void;
   setCodebaseContext: (content: string | null) => void;
   setUploadedFile: (file: UploadedFile | null) => void;
@@ -84,9 +84,7 @@ interface AgileBloomState {
   setAutoModeDelaySeconds: (seconds: number) => void;
   importChatSession: (importedMessages: DiscussionMessage[]) => void;
   
-  setAiConfig: (config: AIConfig) => void;
-
-  setQuotaExceeded: (isExceeded: boolean) => void;
+  setSettings: (config: Settings) => void;
 
   setNarrativeSummary: (summary: string) => void;
   setSummaryLoading: (loading: boolean) => void;
@@ -106,6 +104,7 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
   isHelpModalOpen: false,
   userMessageTimestamps: [],
   isRateLimited: false,
+  isQuotaExceeded: false,
   memoryContext: [],
   codebaseContext: null,
   uploadedFile: null,
@@ -114,8 +113,7 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
   trackedStories: [],
   isAutoModeEnabled: false,
   autoModeDelaySeconds: DEFAULT_AUTO_MODE_DELAY_SECONDS,
-  aiConfig: null,
-  isQuotaExceeded: false,
+  settings: null,
   narrativeSummary: '',
   isSummaryLoading: false,
   experts: getInitialExperts(),
@@ -160,6 +158,7 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
       error: null,
       userMessageTimestamps: [],
       isRateLimited: false,
+      isQuotaExceeded: false,
       memoryContext: [],
       codebaseContext: null,
       uploadedFile: null,
@@ -172,7 +171,7 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
       isSummaryLoading: false,
       selectedExpertRoles: [],
       lastActionWasAutoContinue: false,
-      // Note: isQuotaExceeded, aiConfig, and experts are NOT reset here intentionally.
+      // Note: settings and experts are NOT reset here intentionally.
       // They are system-level states that persist until the user refreshes.
     });
   },
@@ -181,6 +180,7 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
     userMessageTimestamps: [...state.userMessageTimestamps, timestamp],
   })),
   setRateLimitedStatus: (isLimited) => set({ isRateLimited: isLimited }),
+  setQuotaExceeded: (isExceeded) => set({ isQuotaExceeded: isExceeded }),
   addMemoryEntry: (entry: string) => set((state) => {
     const newMemory = [...state.memoryContext, entry];
     return { memoryContext: newMemory.slice(-MAX_MEMORY_ENTRIES) }; 
@@ -337,6 +337,7 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
         error: null,
         userMessageTimestamps: [],
         isRateLimited: false,
+        isQuotaExceeded: false,
         memoryContext: [],
         codebaseContext: null, // Also clear codebase on import
         uploadedFile: null,
@@ -357,9 +358,7 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
       };
     });
   },
-  setAiConfig: (config) => set({ aiConfig: config }),
-
-  setQuotaExceeded: (isExceeded) => set({ isQuotaExceeded: isExceeded, isLoading: false }),
+  setSettings: (settings) => set({ settings }),
 
   setNarrativeSummary: (summary) => set({ narrativeSummary: summary }),
   setSummaryLoading: (loading) => set({ isSummaryLoading: loading }),
