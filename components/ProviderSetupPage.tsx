@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Settings, AiProvider, ExpertRole, Expert, ApiKeyStatus, ApiKeyStatusValue } from '../types';
 import useAgileBloomStore from '../store/useAgileBloomStore';
 import { BrainCircuit, MessageSquareText, Users, PlusCircle, Trash2, Github, Loader2, CheckCircle, XCircle, HelpCircle, KeyRound, ArrowRight, ShieldCheck, ShieldAlert, BadgeInfo } from 'lucide-react';
@@ -41,6 +40,7 @@ export const ProviderSetupPage: React.FC<ProviderSetupPageProps> = ({
   const [newExpert, setNewExpert] = useState({ name: '', emoji: '', description: '' });
   const [gitRepoUrl, setGitRepoUrl] = useState('');
   const [repoFetchState, setRepoFetchState] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message: string; }>({ status: 'idle', message: '' });
+  const initialValidationRef = useRef(false);
 
   const staticModelsForProvider = useMemo(() => fetchModelsForProvider(settings.provider), [settings.provider]);
   const currentModelDetails = useMemo(() => getModelConfigById(settings.model), [settings.model]);
@@ -54,16 +54,14 @@ export const ProviderSetupPage: React.FC<ProviderSetupPageProps> = ({
       ...prev,
       provider,
       model: newModelId,
-      apiKey: { ...prev.apiKey, [provider]: '' }
+      // Do not clear API key on switch, as it might be from env vars
     }));
 
-    if (!apiKeyStatus[provider]) {
-        setApiKeyStatus(prev => ({ ...prev, [provider]: 'unverified' }));
-    }
+    // If the new provider has a key but no status, it will be auto-validated by the effect
   };
 
   const validateAndFetchModels = async () => {
-    if (!settings.apiKey[settings.provider]) return;
+    if (!settings.apiKey[settings.provider] || isVerifying) return;
     setIsVerifying(true);
     setApiKeyStatus(prev => ({...prev, [settings.provider]: 'verifying' as ApiKeyStatusValue}));
     
@@ -81,13 +79,25 @@ export const ProviderSetupPage: React.FC<ProviderSetupPageProps> = ({
             }
         } catch (error) {
             console.error("Failed to fetch dynamic models", error);
-            // Fallback to static models is handled by the UI
         } finally {
             setIsFetchingModels(false);
         }
     }
     setIsVerifying(false);
   };
+
+  useEffect(() => {
+    if (initialValidationRef.current) return;
+
+    const provider = settings.provider;
+    const key = settings.apiKey[provider];
+    const status = apiKeyStatus[provider];
+
+    if (key && (!status || status === 'unverified')) {
+        initialValidationRef.current = true;
+        validateAndFetchModels();
+    }
+  }, [settings.provider, settings.apiKey, apiKeyStatus]);
   
   const handleExpertSelection = (role: ExpertRole) => {
     if (role === ROLE_SCRUM_LEADER) return;
@@ -139,7 +149,7 @@ export const ProviderSetupPage: React.FC<ProviderSetupPageProps> = ({
     }
   };
   
-  const isNextDisabled = isVerifying || isFetchingModels || apiKeyStatus[settings.provider] !== 'valid';
+  const isNextDisabled = !settings.topic.trim() || isVerifying || isFetchingModels || apiKeyStatus[settings.provider] !== 'valid';
 
   return (
     <div className="min-h-screen bg-background text-gray-200 flex items-center justify-center p-4">
@@ -148,11 +158,67 @@ export const ProviderSetupPage: React.FC<ProviderSetupPageProps> = ({
           <div className="p-8">
             <header className="text-center mb-8 relative">
               <h1 className="text-3xl font-bold text-accent">Configure Your AI Assistant</h1>
-              <p className="text-secondary mt-2">Set up your discussion topic and AI provider to begin.</p>
+              <p className="text-secondary mt-2">Set up your AI provider and discussion topic to begin.</p>
                <button onClick={() => setIsHelpOpen(true)} className="absolute top-0 right-0 p-2 text-gray-400 hover:text-accent" title="Help"><HelpCircle /></button>
             </header>
 
             <form onSubmit={(e) => { e.preventDefault(); onComplete(); }} className="space-y-8">
+                
+                {/* AI Configuration */}
+                <fieldset>
+                    {/* Provider Selection */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {Object.values(AiProvider).map(p => (
+                            <button key={p} type="button" onClick={() => handleProviderSelect(p)} className={`p-3 rounded-lg border-2 text-center transition-all ${settings.provider === p ? 'bg-accent text-background border-accent' : 'bg-[#212934] border-[#5c6f7e] hover:border-accent/50'}`}>
+                                <span className="text-2xl">{PROVIDERS[p].logo}</span>
+                                <span className="block text-sm font-semibold mt-1">{PROVIDERS[p].name}</span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* API Key Input */}
+                    <div className="mt-6">
+                        <label className="flex items-center text-lg font-semibold text-gray-200 mb-2"><KeyRound className="mr-3 text-accent" /> API Key</label>
+                        <div className="flex items-center gap-2">
+                            <input type="password" value={settings.apiKey[settings.provider] || ''} onChange={(e) => setSettings(p => ({...p, apiKey: {...p.apiKey, [p.provider]: e.target.value}}))} placeholder={`Enter your ${settings.provider} API key`} className="w-full p-3 bg-[#212934] border border-[#5c6f7e] rounded-lg focus:outline-none focus:ring-2 focus:ring-accent" />
+                            <button type="button" onClick={validateAndFetchModels} disabled={isVerifying || !settings.apiKey[settings.provider] || currentProviderStatus === 'valid'} className="px-4 py-2 bg-[#5c6f7e] rounded-lg hover:bg-[#95aac0] disabled:opacity-50 h-[48px]">{isVerifying ? <Loader2 className="animate-spin"/> : "Validate"}</button>
+                        </div>
+                        <div className={`flex items-center gap-2 mt-2 text-sm ${statusIndicatorConfig[isVerifying ? 'verifying' : currentProviderStatus].color}`}>{statusIndicatorConfig[isVerifying ? 'verifying' : currentProviderStatus].icon}{statusIndicatorConfig[isVerifying ? 'verifying' : currentProviderStatus].text}</div>
+                    </div>
+                
+                    {/* Model Parameters */}
+                    <fieldset disabled={currentProviderStatus !== 'valid'} className="space-y-4 disabled:opacity-50 transition-opacity mt-6">
+                        <legend className="text-lg font-semibold text-gray-200 mb-2">Model Parameters</legend>
+                        <select value={settings.model} onChange={e => setSettings(p => ({...p, model: e.target.value}))} disabled={isFetchingModels} className="w-full p-3 bg-[#212934] border border-[#5c6f7e] rounded-lg focus:outline-none focus:ring-2 focus:ring-accent disabled:cursor-not-allowed">
+                            {isFetchingModels ? <option>Loading models...</option> : (dynamicModels[settings.provider] || staticModelsForProvider.map(m=>m.id)).map(modelId => <option key={modelId} value={modelId}>{getModelConfigById(modelId)?.name || modelId}</option>)}
+                        </select>
+                        
+                        {currentModelDetails && (
+                            <div className="p-4 bg-background/50 border border-muted rounded-lg space-y-3">
+                                <h4 className="text-xl font-bold text-accent">{currentModelDetails.name}</h4>
+                                <p className="text-sm text-primary/80">{currentModelDetails.description}</p>
+                                <div className="p-3 bg-[#333e48]/50 rounded-md border-l-4 border-accent">
+                                    <h5 className="text-sm font-semibold mb-2">Strengths:</h5>
+                                    <ul className="flex flex-wrap gap-2">{currentModelDetails.strengths.map(s => <li key={s} className="text-xs bg-accent/20 text-accent px-2 py-1 rounded-full">{s}</li>)}</ul>
+                                </div>
+                            </div>
+                        )}
+
+                        {currentModelDetails?.parameters.map(param => (
+                            <SliderInput 
+                                key={param.id} 
+                                id={param.id}
+                                label={param.name}
+                                min={param.min}
+                                max={param.max}
+                                step={param.step}
+                                value={settings.parameters[param.id] ?? param.defaultValue} 
+                                onChange={(val) => setSettings(p => ({...p, parameters: {...p.parameters, [param.id]: val}}))} 
+                            />
+                        ))}
+                    </fieldset>
+                </fieldset>
+
                 {/* Topic and Context */}
                 <fieldset className="space-y-6">
                     <div>
@@ -194,64 +260,11 @@ export const ProviderSetupPage: React.FC<ProviderSetupPageProps> = ({
                     </div>
                 </fieldset>
 
-                {/* Provider Selection */}
-                <fieldset>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {Object.values(AiProvider).map(p => (
-                            <button key={p} type="button" onClick={() => handleProviderSelect(p)} className={`p-3 rounded-lg border-2 text-center transition-all ${settings.provider === p ? 'bg-accent text-background border-accent' : 'bg-[#212934] border-[#5c6f7e] hover:border-accent/50'}`}>
-                                <span className="text-2xl">{PROVIDERS[p].logo}</span>
-                                <span className="block text-sm font-semibold mt-1">{PROVIDERS[p].name}</span>
-                            </button>
-                        ))}
-                    </div>
-                </fieldset>
-
-                {/* API Key Input */}
-                <fieldset>
-                    <label className="flex items-center text-lg font-semibold text-gray-200 mb-2"><KeyRound className="mr-3 text-accent" /> API Key</label>
-                    <div className="flex items-center gap-2">
-                        <input type="password" value={settings.apiKey[settings.provider] || ''} onChange={(e) => setSettings(p => ({...p, apiKey: {...p.apiKey, [p.provider]: e.target.value}}))} placeholder={`Enter your ${settings.provider} API key`} className="w-full p-3 bg-[#212934] border border-[#5c6f7e] rounded-lg focus:outline-none focus:ring-2 focus:ring-accent" />
-                        <button type="button" onClick={validateAndFetchModels} disabled={isVerifying || !settings.apiKey[settings.provider] || currentProviderStatus === 'valid'} className="px-4 py-2 bg-[#5c6f7e] rounded-lg hover:bg-[#95aac0] disabled:opacity-50 h-[48px]">{isVerifying ? <Loader2 className="animate-spin"/> : "Validate"}</button>
-                    </div>
-                    <div className={`flex items-center gap-2 mt-2 text-sm ${statusIndicatorConfig[isVerifying ? 'verifying' : currentProviderStatus].color}`}>{statusIndicatorConfig[isVerifying ? 'verifying' : currentProviderStatus].icon}{statusIndicatorConfig[isVerifying ? 'verifying' : currentProviderStatus].text}</div>
-                </fieldset>
-                
-                {/* Model Parameters */}
-                <fieldset disabled={currentProviderStatus !== 'valid'} className="space-y-4 disabled:opacity-50 transition-opacity">
-                    <legend className="text-lg font-semibold text-gray-200 mb-2">Model Parameters</legend>
-                    <select value={settings.model} onChange={e => setSettings(p => ({...p, model: e.target.value}))} disabled={isFetchingModels} className="w-full p-3 bg-[#212934] border border-[#5c6f7e] rounded-lg focus:outline-none focus:ring-2 focus:ring-accent disabled:cursor-not-allowed">
-                        {isFetchingModels ? <option>Loading models...</option> : (dynamicModels[settings.provider] || staticModelsForProvider.map(m=>m.id)).map(modelId => <option key={modelId} value={modelId}>{getModelConfigById(modelId)?.name || modelId}</option>)}
-                    </select>
-                    
-                    {currentModelDetails && (
-                        <div className="p-4 bg-background/50 border border-muted rounded-lg space-y-3">
-                            <h4 className="text-xl font-bold text-accent">{currentModelDetails.name}</h4>
-                            <p className="text-sm text-primary/80">{currentModelDetails.description}</p>
-                            <div className="p-3 bg-[#333e48]/50 rounded-md border-l-4 border-accent">
-                                <h5 className="text-sm font-semibold mb-2">Strengths:</h5>
-                                <ul className="flex flex-wrap gap-2">{currentModelDetails.strengths.map(s => <li key={s} className="text-xs bg-accent/20 text-accent px-2 py-1 rounded-full">{s}</li>)}</ul>
-                            </div>
-                        </div>
-                    )}
-
-                    {currentModelDetails?.parameters.map(param => (
-                        <SliderInput 
-                            key={param.id} 
-                            id={param.id}
-                            label={param.name}
-                            min={param.min}
-                            max={param.max}
-                            step={param.step}
-                            value={settings.parameters[param.id] ?? param.defaultValue} 
-                            onChange={(val) => setSettings(p => ({...p, parameters: {...p.parameters, [param.id]: val}}))} 
-                        />
-                    ))}
-                </fieldset>
-
                 <div className="pt-4 text-center">
                     <button type="submit" disabled={isNextDisabled} className="group w-full sm:w-auto inline-flex items-center justify-center px-8 py-3 text-lg font-bold text-white bg-accent-dark rounded-lg shadow-lg hover:bg-accent-dark/90 transition-all focus:outline-none focus:ring-4 focus:ring-accent/50 disabled:bg-[#5c6f7e] disabled:cursor-not-allowed">
-                        Next <ArrowRight className="ml-3 h-6 w-6 transition-transform group-hover:translate-x-1" />
+                        Begin Discussion <ArrowRight className="ml-3 h-6 w-6 transition-transform group-hover:translate-x-1" />
                     </button>
+                    {!isNextDisabled && !settings.topic.trim() && <p className="text-xs text-yellow-400 mt-2">Please enter a topic to continue.</p>}
                 </div>
             </form>
           </div>
