@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useRef } from 'react';
 import useAgileBloomStore from '../store/useAgileBloomStore';
 import { getAiResponse } from '../services/aiService';
@@ -81,7 +82,8 @@ export const useAgileBloomChat = () => {
     addMemoryEntry,
     clearUploadedFile,
     addTrackedQuestion,
-    updateTrackedQuestionStatus, 
+    updateTrackedQuestionStatus,
+    removeTrackedQuestion, 
     addTrackedStory,
     updateTrackedStory,
     addTrackedTask,
@@ -749,6 +751,11 @@ export const useAgileBloomChat = () => {
   const updateQuestionStatusAndPotentiallyGenerateActions = useCallback(async (questionId: string, newStatus: QuestionStatus) => {
     if (isLoading) return;
 
+    if (newStatus === QuestionStatus.Dismissed) {
+        removeTrackedQuestion(questionId);
+        return;
+    }
+
     // Update the status locally first for immediate UI feedback
     updateTrackedQuestionStatus(questionId, newStatus);
     
@@ -777,8 +784,8 @@ export const useAgileBloomChat = () => {
             }
         }
     }
-    // Dismissed and Open statuses require no further AI action.
-  }, [isLoading, updateTrackedQuestionStatus, sendMessage, topic, processAndAddAiResponse, escapeForPrompt]);
+    // Open status requires no further AI action.
+  }, [isLoading, updateTrackedQuestionStatus, removeTrackedQuestion, sendMessage, topic, processAndAddAiResponse, escapeForPrompt, setLoading, addErrorMessage]);
 
   // Effect for rate limiting check
   useEffect(() => {

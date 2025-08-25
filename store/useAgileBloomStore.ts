@@ -65,6 +65,7 @@ interface AgileBloomState {
 
   addTrackedQuestion: (question: Omit<TrackedQuestion, 'id' | 'timestamp' | 'status'>) => void;
   updateTrackedQuestionStatus: (id: string, status: QuestionStatus) => void;
+  removeTrackedQuestion: (id: string) => void;
   clearAllTrackedQuestions: () => void;
   clearTrackedQuestionsByStatus: (status: QuestionStatus) => void; 
 
@@ -205,6 +206,11 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
       trackedQuestions: state.trackedQuestions.map((q) =>
         q.id === id ? { ...q, status } : q
       ),
+    }));
+  },
+  removeTrackedQuestion: (id: string) => {
+    set((state) => ({
+        trackedQuestions: state.trackedQuestions.filter((q) => q.id !== id),
     }));
   },
   clearAllTrackedQuestions: () => set({ trackedQuestions: [] }),
