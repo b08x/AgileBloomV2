@@ -1,13 +1,15 @@
+
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Settings, AiProvider, ExpertRole, Expert, ApiKeyStatus, ApiKeyStatusValue } from '../types';
 import useAgileBloomStore from '../store/useAgileBloomStore';
 import { BrainCircuit, MessageSquareText, Users, PlusCircle, Trash2, Github, Loader2, CheckCircle, XCircle, HelpCircle, KeyRound, ArrowRight, ShieldCheck, ShieldAlert, BadgeInfo } from 'lucide-react';
-import { fetchGitHubRepoContents } from '../services/gitService';
 import { DEFAULT_EXPERT_ROLE_NAMES, ROLE_SCRUM_LEADER } from '../constants';
 import { SetupHelpModal } from './SetupDocumentationSidebar';
 import { PROVIDERS, fetchModelsForProvider, getModelConfigById, fetchAvailableModels } from '../services/modelService';
 import { validateApiKey } from '../services/validationService';
 import { SliderInput } from './SliderInput';
+import { RepoFileSelector } from './RepoFileSelector';
 
 interface ProviderSetupPageProps {
   settings: Settings;
@@ -31,7 +33,17 @@ const statusIndicatorConfig: Record<ApiKeyStatusValue | 'verifying', { text: str
 export const ProviderSetupPage: React.FC<ProviderSetupPageProps> = ({
   settings, setSettings, apiKeyStatus, setApiKeyStatus, onComplete, dynamicModels, setDynamicModels
 }) => {
-  const { experts, addExpert, removeExpert, setCodebaseContext } = useAgileBloomStore();
+  const { 
+    experts, 
+    addExpert, 
+    removeExpert,
+    repoExcludePatterns,
+    setRepoExcludePatterns,
+    listRepoFiles,
+    codebaseImportStatus,
+    codebaseImportMessage,
+    clearRepoData,
+  } = useAgileBloomStore();
   
   const [isVerifying, setIsVerifying] = useState(false);
   const [isFetchingModels, setIsFetchingModels] = useState(false);
@@ -39,12 +51,18 @@ export const ProviderSetupPage: React.FC<ProviderSetupPageProps> = ({
   const [showAddExpertForm, setShowAddExpertForm] = useState(false);
   const [newExpert, setNewExpert] = useState({ name: '', emoji: '', description: '' });
   const [gitRepoUrl, setGitRepoUrl] = useState('');
-  const [repoFetchState, setRepoFetchState] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message: string; }>({ status: 'idle', message: '' });
   const initialValidationRef = useRef(false);
 
   const staticModelsForProvider = useMemo(() => fetchModelsForProvider(settings.provider), [settings.provider]);
   const currentModelDetails = useMemo(() => getModelConfigById(settings.model), [settings.model]);
   const currentProviderStatus = apiKeyStatus[settings.provider] || 'unverified';
+
+  useEffect(() => {
+    // When URL is cleared, reset all repo state
+    if (!gitRepoUrl) {
+      clearRepoData();
+    }
+  }, [gitRepoUrl, clearRepoData]);
 
   const handleProviderSelect = (provider: AiProvider) => {
     const staticModels = fetchModelsForProvider(provider);
@@ -135,21 +153,12 @@ export const ProviderSetupPage: React.FC<ProviderSetupPageProps> = ({
     }
   };
   
-  const handleFetchRepo = async () => {
-    if (!gitRepoUrl) return;
-    setRepoFetchState({ status: 'loading', message: 'Fetching repository files...' });
-    try {
-      const { content: repoContent, fileCount } = await fetchGitHubRepoContents(gitRepoUrl);
-      setCodebaseContext(repoContent);
-      setSettings(prev => ({ ...prev, context: `${prev.context}\n\n--- Start of GitHub Repo Context ---\n${repoContent}\n--- End of GitHub Repo Context ---\n`.trim() }));
-      setRepoFetchState({ status: 'success', message: `Successfully added content from ${fileCount} files.` });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'An unknown error occurred.';
-      setRepoFetchState({ status: 'error', message });
-    }
+  const handleListFiles = () => {
+    if (!gitRepoUrl || codebaseImportStatus === 'loading_list') return;
+    listRepoFiles(gitRepoUrl);
   };
   
-  const isNextDisabled = !settings.topic.trim() || isVerifying || isFetchingModels || apiKeyStatus[settings.provider] !== 'valid';
+  const isNextDisabled = !settings.topic.trim() || isVerifying || isFetchingModels || apiKeyStatus[settings.provider] !== 'valid' || codebaseImportStatus === 'loading_list' || codebaseImportStatus === 'loading_content';
 
   return (
     <div className="min-h-screen bg-background text-gray-200 flex items-center justify-center p-4">
@@ -225,13 +234,21 @@ export const ProviderSetupPage: React.FC<ProviderSetupPageProps> = ({
                         <label htmlFor="topic" className="flex items-center text-lg font-semibold text-gray-200 mb-2"><BrainCircuit className="mr-3 text-accent" /> Main Topic <span className="text-red-500 ml-1">*</span></label>
                         <input id="topic" type="text" value={settings.topic} onChange={(e) => setSettings(p => ({...p, topic: e.target.value}))} placeholder="e.g., Brainstorm features for a new productivity app" required className="w-full p-3 bg-[#212934] border border-[#5c6f7e] rounded-lg focus:outline-none focus:ring-2 focus:ring-accent" />
                     </div>
-                     <div>
-                        <label htmlFor="github-repo" className="flex items-center text-lg font-semibold text-gray-200 mb-2"><Github className="mr-3 text-accent" /> Import Code from GitHub Repo (Optional)</label>
+                     <div className="space-y-3">
+                        <label htmlFor="github-repo" className="flex items-center text-lg font-semibold text-gray-200"><Github className="mr-3 text-accent" /> Import Code from GitHub Repo (Optional)</label>
                         <div className="flex gap-2">
-                        <input id="github-repo" type="url" value={gitRepoUrl} onChange={(e) => setGitRepoUrl(e.target.value)} placeholder="e.g., https://github.com/owner/repo" className="w-full p-3 bg-[#212934] border border-[#5c6f7e] rounded-lg focus:outline-none focus:ring-2 focus:ring-accent" />
-                        <button type="button" onClick={handleFetchRepo} disabled={!gitRepoUrl || repoFetchState.status === 'loading'} className="px-4 py-2 bg-[#5c6f7e] rounded-lg hover:bg-[#95aac0] disabled:opacity-50 flex items-center justify-center w-32 shrink-0">{repoFetchState.status === 'loading' ? <Loader2 className="animate-spin" /> : "Fetch Code"}</button>
+                            <input id="github-repo" type="url" value={gitRepoUrl} onChange={(e) => setGitRepoUrl(e.target.value)} placeholder="e.g., https://github.com/owner/repo" className="w-full p-3 bg-[#212934] border border-[#5c6f7e] rounded-lg focus:outline-none focus:ring-2 focus:ring-accent" />
+                            <button type="button" onClick={handleListFiles} disabled={!gitRepoUrl || codebaseImportStatus === 'loading_list'} className="px-4 py-2 bg-[#5c6f7e] rounded-lg hover:bg-[#95aac0] disabled:opacity-50 flex items-center justify-center w-32 shrink-0">{codebaseImportStatus === 'loading_list' ? <Loader2 className="animate-spin" /> : "List Files"}</button>
                         </div>
-                        {repoFetchState.status !== 'idle' && <p className={`mt-2 text-xs flex items-center gap-2 ${repoFetchState.status === 'success' ? 'text-green-400' : 'text-red-400'}`}>{repoFetchState.status === 'success' ? <CheckCircle size={14}/> : <XCircle size={14}/>}{repoFetchState.message}</p>}
+                        <label htmlFor="exclude-patterns" className="text-sm text-secondary">Exclude patterns (one per line, gitignore format):</label>
+                        <textarea id="exclude-patterns" value={repoExcludePatterns} onChange={(e) => setRepoExcludePatterns(e.target.value)} rows={3} className="w-full p-2 bg-[#212934] border border-[#5c6f7e] rounded-lg font-mono text-xs focus:outline-none focus:ring-1 focus:ring-accent" />
+                        
+                        {(codebaseImportStatus !== 'idle') && (
+                            <div className="animate-fadeIn">
+                                {codebaseImportStatus === 'error' && <p className="text-sm text-red-400 flex items-center gap-2"><XCircle size={14}/>{codebaseImportMessage}</p>}
+                                {codebaseImportStatus === 'success_list' && <RepoFileSelector repoUrl={gitRepoUrl}/>}
+                            </div>
+                        )}
                     </div>
                 </fieldset>
 

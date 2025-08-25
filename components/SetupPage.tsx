@@ -4,7 +4,7 @@ import useAgileBloomStore from '../store/useAgileBloomStore';
 import { fetchModelsForProvider } from '../services/modelService';
 import { AIModelConfig, AiProvider, AIConfig, ExpertRole, Expert } from '../types';
 import { validateApiKey } from '../services/validationService';
-import { fetchGitHubRepoContents } from '../services/gitService';
+import { listGitHubRepoFiles, fetchGitHubFilesContent } from '../services/gitService';
 import { DEFAULT_EXPERT_ROLE_NAMES, ROLE_SCRUM_LEADER } from '../constants';
 import { SetupHelpModal } from './SetupDocumentationSidebar';
 import { AIConfigSidebar } from './NarrativeSummarySidebar';
@@ -133,10 +133,12 @@ export const SetupPage: React.FC<SetupPageProps> = ({ onBegin }) => {
     if (!gitRepoUrl) return;
     setRepoFetchState({ status: 'loading', message: 'Fetching repository files...' });
     try {
-      const { content: repoContent, fileCount } = await fetchGitHubRepoContents(gitRepoUrl);
+      const files = await listGitHubRepoFiles(gitRepoUrl, '');
+      const filePaths = files.map(f => f.path);
+      const { content: repoContent, fileCount } = await fetchGitHubFilesContent(gitRepoUrl, filePaths);
       setCodebaseContext(repoContent);
       setContext(prev => `${prev}\n\n--- Start of GitHub Repo Context ---\n${repoContent}\n--- End of GitHub Repo Context ---\n`.trim());
-      setRepoFetchState({ status: 'success', message: `Successfully added content from ${fileCount} files.` });
+      setRepoFetchState({ status: 'success', message: `Successfully added content from ${fileCount} file(s).` });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'An unknown error occurred.';
       setRepoFetchState({ status: 'error', message });

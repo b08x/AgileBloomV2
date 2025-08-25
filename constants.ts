@@ -314,7 +314,7 @@ As the expert ({emulated_expert_name}), your task is to synthesize a single, coh
 2.  **Generate Comprehensive Document:** Write a single, well-structured document that fulfills all the tasks. Use Markdown for formatting (headings, lists, code blocks, etc.). The document should be detailed, clear, and ready for inclusion in a project's knowledge base.
 3.  **Structure and Cohesion:** Do not just list the answers to each task. Organize the information logically. For example, you might have sections for "API Reference," "User Guide," "Component Architecture," etc., depending on the tasks.
 4.  **Format Output:** Your entire response MUST be a single JSON object.
-    - The complete, compiled documentation MUST be placed in the \`work\` field as a single Markdown string.
+    - The complete, compiled documentation MUST be placed in the \`work\` field. The content for this field MUST be a **single, valid JSON string**. This means all special characters must be properly escaped. For example, all newline characters within your Markdown document must be represented as \`\\n\`, all double quotes as \`\\"\`, and all backslashes as \`\\\\\`.
     - The \`message\` field MUST be a brief summary of the action taken (e.g., "I have compiled the documentation based on the assigned tasks.").
 
 **JSON Output Structure:**

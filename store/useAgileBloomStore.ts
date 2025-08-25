@@ -1,8 +1,10 @@
 
+
 import {create} from 'zustand';
 import { DiscussionMessage, ExpertRole, UploadedFile, TrackedQuestion, QuestionStatus, TrackedTask, TaskStatus, Expert, TrackedStory, StoryStatus, StoryPriority, Settings } from '../types';
 import { DEFAULT_EXPERTS, DEFAULT_NUM_THOUGHTS, MAX_MEMORY_ENTRIES, DEFAULT_AUTO_MODE_DELAY_SECONDS, ROLE_SYSTEM, ROLE_USER, ROLE_SCRUM_LEADER } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
+import { listGitHubRepoFiles, fetchGitHubFilesContent } from '../services/gitService';
 
 const AGILE_BLOOM_CUSTOM_EXPERTS_KEY = 'agile-bloom-custom-experts';
 
@@ -17,6 +19,8 @@ const getInitialExperts = (): Record<ExpertRole, Expert> => {
   }
 };
 
+type CodebaseImportStatus = 'idle' | 'loading_list' | 'success_list' | 'loading_content' | 'success_content' | 'error';
+
 interface AgileBloomState {
   topic: string | null;
   discussion: DiscussionMessage[];
@@ -28,7 +32,6 @@ interface AgileBloomState {
   isRateLimited: boolean;
   isQuotaExceeded: boolean;
   memoryContext: string[];
-  codebaseContext: string | null;
   uploadedFile: UploadedFile | null;
   
   trackedQuestions: TrackedQuestion[];
@@ -47,6 +50,15 @@ interface AgileBloomState {
   selectedExpertRoles: ExpertRole[];
   lastActionWasAutoContinue: boolean;
 
+  // Codebase Context State
+  codebaseContext: string | null;
+  codebaseImportStatus: CodebaseImportStatus;
+  codebaseImportMessage: string | null;
+  repoExcludePatterns: string;
+  repoFiles: { path: string; size: number }[];
+  selectedRepoFiles: Set<string>;
+
+  setCodebaseContext: (context: string | null) => void;
   setTopic: (topic: string) => void;
   addMessage: (message: Omit<DiscussionMessage, 'id' | 'timestamp' | 'expert'> & { expertName: ExpertRole }) => DiscussionMessage;
   addErrorMessage: (text: string) => void;
@@ -59,9 +71,17 @@ interface AgileBloomState {
   setRateLimitedStatus: (isLimited: boolean) => void;
   setQuotaExceeded: (isExceeded: boolean) => void;
   addMemoryEntry: (entry: string) => void;
-  setCodebaseContext: (content: string | null) => void;
   setUploadedFile: (file: UploadedFile | null) => void;
   clearUploadedFile: () => void;
+  
+  // New Codebase Actions
+  setRepoExcludePatterns: (patterns: string) => void;
+  listRepoFiles: (repoUrl: string) => Promise<void>;
+  confirmRepoFileSelection: (repoUrl: string) => Promise<void>;
+  toggleRepoFileSelection: (path: string, select?: boolean) => void;
+  toggleSelectAllRepoFiles: (select: boolean) => void;
+  clearRepoData: () => void;
+
 
   addTrackedQuestion: (question: Omit<TrackedQuestion, 'id' | 'timestamp' | 'status'>) => void;
   updateTrackedQuestionStatus: (id: string, status: QuestionStatus) => void;
@@ -107,7 +127,6 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
   isRateLimited: false,
   isQuotaExceeded: false,
   memoryContext: [],
-  codebaseContext: null,
   uploadedFile: null,
   trackedQuestions: [],
   trackedTasks: [],
@@ -120,7 +139,16 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
   experts: getInitialExperts(),
   selectedExpertRoles: [],
   lastActionWasAutoContinue: false,
+  
+  // Codebase state
+  codebaseContext: null,
+  codebaseImportStatus: 'idle',
+  codebaseImportMessage: null,
+  repoExcludePatterns: `# Dependency lock files\npackage-lock.json\nyarn.lock\n\n# Build output\n/dist/\n/build/\n\n# Logs\n*.log`,
+  repoFiles: [],
+  selectedRepoFiles: new Set(),
 
+  setCodebaseContext: (context) => set({ codebaseContext: context }),
   setTopic: (topic) => set({ topic, error: null }),
   addMessage: (message) => {
     const expert = get().experts[message.expertName] || get().experts[ROLE_SYSTEM];
@@ -161,7 +189,6 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
       isRateLimited: false,
       isQuotaExceeded: false,
       memoryContext: [],
-      codebaseContext: null,
       uploadedFile: null,
       trackedQuestions: [],
       trackedTasks: [],
@@ -172,8 +199,6 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
       isSummaryLoading: false,
       selectedExpertRoles: [],
       lastActionWasAutoContinue: false,
-      // Note: settings and experts are NOT reset here intentionally.
-      // They are system-level states that persist until the user refreshes.
     });
   },
   toggleHelpModal: () => set((state) => ({ isHelpModalOpen: !state.isHelpModalOpen })),
@@ -186,9 +211,89 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
     const newMemory = [...state.memoryContext, entry];
     return { memoryContext: newMemory.slice(-MAX_MEMORY_ENTRIES) }; 
   }),
-  setCodebaseContext: (content) => set({ codebaseContext: content }),
   setUploadedFile: (file: UploadedFile | null) => set({ uploadedFile: file }),
   clearUploadedFile: () => set({ uploadedFile: null }),
+
+  // Codebase Actions
+  setRepoExcludePatterns: (patterns) => set({ repoExcludePatterns: patterns }),
+  listRepoFiles: async (repoUrl) => {
+      get().clearRepoData(); // Clear previous results before fetching new list
+      set({ codebaseImportStatus: 'loading_list', codebaseImportMessage: 'Fetching repository file list...' });
+      try {
+          const files = await listGitHubRepoFiles(repoUrl, get().repoExcludePatterns);
+          set({
+              repoFiles: files,
+              codebaseImportStatus: 'success_list',
+              codebaseImportMessage: `Found ${files.length} files. Select files to include in context.`,
+          });
+          get().toggleSelectAllRepoFiles(true); // Select all by default
+      } catch (error) {
+          const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+          set({
+              codebaseImportStatus: 'error',
+              codebaseImportMessage: message,
+          });
+      }
+  },
+  confirmRepoFileSelection: async (repoUrl) => {
+      const { selectedRepoFiles } = get();
+      if (selectedRepoFiles.size === 0) {
+          set({
+              codebaseContext: null,
+              codebaseImportStatus: 'success_content',
+              codebaseImportMessage: 'No files were selected. Codebase context is empty.',
+          });
+          return;
+      }
+
+      set({ codebaseImportStatus: 'loading_content', codebaseImportMessage: `Fetching content for ${selectedRepoFiles.size} selected file(s)...` });
+      try {
+          const { content: repoContent, fileCount } = await fetchGitHubFilesContent(repoUrl, Array.from(selectedRepoFiles));
+          set({
+              codebaseContext: repoContent,
+              codebaseImportStatus: 'success_content',
+              codebaseImportMessage: `Successfully added content from ${fileCount} file(s).`,
+          });
+      } catch (error) {
+          const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+          set({
+              codebaseContext: null,
+              codebaseImportStatus: 'error',
+              codebaseImportMessage: message,
+          });
+      }
+  },
+  toggleRepoFileSelection: (path, select) => {
+    set(state => {
+        const newSelected = new Set(state.selectedRepoFiles);
+        const shouldSelect = select ?? !newSelected.has(path);
+        if (shouldSelect) {
+            newSelected.add(path);
+        } else {
+            newSelected.delete(path);
+        }
+        return { selectedRepoFiles: newSelected };
+    });
+  },
+  toggleSelectAllRepoFiles: (select) => {
+      set(state => {
+          if (select) {
+              const allPaths = state.repoFiles.map(f => f.path);
+              return { selectedRepoFiles: new Set(allPaths) };
+          }
+          return { selectedRepoFiles: new Set() };
+      });
+  },
+  clearRepoData: () => {
+      set({
+          codebaseContext: null,
+          codebaseImportStatus: 'idle',
+          codebaseImportMessage: null,
+          repoFiles: [],
+          selectedRepoFiles: new Set(),
+      });
+  },
+
 
   addTrackedQuestion: (questionData) => {
     const newQuestion: TrackedQuestion = {
