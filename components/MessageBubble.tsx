@@ -1,9 +1,8 @@
 
-
-import React from 'react';
-import { DiscussionMessage, Expert, ExpertRole, SearchCitation } from '../types';
+import React, { useState } from 'react';
+import { DiscussionMessage, Expert, SearchCitation } from '../types';
 import { CodeBlock } from './CodeBlock'; 
-import { ExternalLink, CornerDownRight } from 'lucide-react';
+import { ExternalLink, CornerDownRight, Clipboard, Download } from 'lucide-react';
 import { ROLE_SCRUM_LEADER, ROLE_USER, ROLE_SYSTEM } from '../constants';
 
 const CitationLink: React.FC<{ citation: SearchCitation }> = ({ citation }) => (
@@ -28,6 +27,7 @@ interface MessageBubbleProps {
 export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message, onElaborate }) => {
   const { expert, text, thoughts, work, timestamp, isError, isCommandResponse, searchCitations } = message;
   const isUser = expert.name === ROLE_USER;
+  const [isCopied, setIsCopied] = useState(false);
 
   const bubbleClasses = isUser
     ? `${expert.bgColor} ml-auto`
@@ -50,7 +50,33 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
                                    work.includes("|") &&
                                    work.includes("---");
   
+  const isCompiledDocumentation =
+    work &&
+    isCommandResponse &&
+    text.startsWith("I have compiled the documentation");
+
   const showElaborateButton = !isUser && expert.name !== ROLE_SYSTEM && !isError && !work;
+
+  const handleCopyToClipboard = () => {
+    if (!work) return;
+    navigator.clipboard.writeText(work).then(() => {
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000); // Reset after 2 seconds
+    });
+  };
+
+  const handleDownloadMarkdown = () => {
+    if (!work) return;
+    const blob = new Blob([work], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${expert.name.toLowerCase().replace(/\s+/g, '-')}-documentation.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
 
   return (
@@ -81,9 +107,31 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message
         )}
         {work && (
           <div className="mt-2 pt-2 border-t border-[#5c6f7e]">
-            <h4 className="text-xs font-semibold mb-1 opacity-80 text-gray-200">
-              {isFishAnalysis ? "FISH Analysis:" : isScrumLeaderStoryResponse ? "Generated User Stories:" : "Work:"}
-            </h4>
+            <div className="flex justify-between items-center mb-1">
+              <h4 className="text-xs font-semibold opacity-80 text-gray-200">
+                {isFishAnalysis ? "FISH Analysis:" : isScrumLeaderStoryResponse ? "Generated User Stories:" : isCompiledDocumentation ? "Compiled Documentation:" : "Work:"}
+              </h4>
+              {isCompiledDocumentation && (
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={handleCopyToClipboard}
+                    className="flex items-center gap-1.5 text-xs text-[#95aac0] hover:text-[#e2a32d] transition-colors"
+                    title="Copy to clipboard"
+                  >
+                    <Clipboard size={14} />
+                    {isCopied ? 'Copied!' : 'Copy'}
+                  </button>
+                  <button
+                    onClick={handleDownloadMarkdown}
+                    className="flex items-center gap-1.5 text-xs text-[#95aac0] hover:text-[#e2a32d] transition-colors"
+                    title="Download as Markdown"
+                  >
+                    <Download size={14} />
+                    Download
+                  </button>
+                </div>
+              )}
+            </div>
             <CodeBlock code={work} language={isFishAnalysis || isScrumLeaderStoryResponse ? "markdown" : "auto"} />
           </div>
         )}
