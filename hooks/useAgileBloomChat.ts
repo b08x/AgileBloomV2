@@ -1,8 +1,9 @@
 
+
 import { useCallback, useEffect, useRef } from 'react';
 import useAgileBloomStore from '../store/useAgileBloomStore';
 import { getAiResponse } from '../services/aiService';
-import { ExpertRole, GeminiResponseJson, CommandHandlerResult, UploadedFile, SearchCitation, DiscussionMessage, TrackedQuestion, QuestionStatus, TaskStatus, TrackedTask, GeminiGeneratedTask, GeminiGeneratedStory, StoryStatus, Settings } from '../types';
+import { Expert, ExpertRole, GeminiResponseJson, CommandHandlerResult, UploadedFile, SearchCitation, DiscussionMessage, TrackedQuestion, QuestionStatus, TaskStatus, TrackedTask, GeminiGeneratedTask, GeminiGeneratedStory, StoryStatus, Settings } from '../types';
 import { 
     DEFAULT_EXPERTS, 
     AVAILABLE_COMMANDS,
@@ -65,7 +66,6 @@ export const useAgileBloomChat = () => {
   const {
     topic,
     discussion,
-    numThoughts,
     memoryContext,
     isAutoModeEnabled,
     autoModeDelaySeconds,
@@ -198,16 +198,17 @@ export const useAgileBloomChat = () => {
     }
 
     if (aiResponse.thoughts && aiResponse.thoughts.length > 0 && addedMessage.expert.name !== ROLE_SYSTEM) {
-      aiResponse.thoughts.forEach(thoughtText => {
-        if (thoughtText.includes('?') || thoughtText.length > 20) { 
-          addTrackedQuestion({
-            text: thoughtText,
-            expertRole: addedMessage.expert.name,
-            expertEmoji: addedMessage.expert.emoji,
-            originalMessageId: addedMessage.id, 
-          });
-        }
-      });
+      // Per user request, find the first thought that is a "pointed question" and track only that one.
+      const pointedQuestion = aiResponse.thoughts.find(thoughtText => thoughtText.trim().endsWith('?'));
+
+      if (pointedQuestion) {
+        addTrackedQuestion({
+          text: pointedQuestion,
+          expertRole: addedMessage.expert.name,
+          expertEmoji: addedMessage.expert.emoji,
+          originalMessageId: addedMessage.id,
+        });
+      }
     }
 
     // Process user stories from the 'work' field (for manual /stories command)
@@ -312,7 +313,6 @@ export const useAgileBloomChat = () => {
         topic,
         GENERATE_NARRATIVE_SUMMARY_PROMPT,
         discussion,
-        0, // No thoughts needed for a summary
         memoryContext,
         ROLE_SCRUM_LEADER
       );
@@ -548,8 +548,10 @@ export const useAgileBloomChat = () => {
             clearTimeout(autoContinueTimeoutRef.current);
             autoContinueTimeoutRef.current = null;
         }
-        // User action should interrupt auto-mode sequence
-        toggleAutoMode(); 
+        // User action should interrupt (disable) auto-mode if it's currently enabled, but not enable it.
+        if (useAgileBloomStore.getState().isAutoModeEnabled) {
+          toggleAutoMode();
+        }
     }
   
     if (!isAutoContinue) {
@@ -577,7 +579,7 @@ export const useAgileBloomChat = () => {
     setLoading(true);
     setError(null);
     
-    const { discussion, numThoughts, memoryContext, codebaseContext, experts } = useAgileBloomStore.getState();
+    const { discussion, memoryContext, codebaseContext, experts } = useAgileBloomStore.getState();
 
     // Attach file content to the AI instruction text if it's text-based
     let finalAiInstruction = aiInstructionText || userMessageText;
@@ -588,7 +590,7 @@ export const useAgileBloomChat = () => {
     try {
         if (action === 'single_ai_response' && targetExpert) {
             const aiResponse = await getAiResponse(
-                topic, finalAiInstruction, discussion, numThoughts, memoryContext, 
+                topic, finalAiInstruction, discussion, memoryContext, 
                 targetExpert, file, codebaseContext, assignedTasksContext
             );
             processAndAddAiResponse(aiResponse, targetExpert);
@@ -617,7 +619,7 @@ export const useAgileBloomChat = () => {
                             .replace(/{expert_emoji_placeholder}/g, expert.emoji);
 
                         const aiResponse = await getAiResponse(
-                            topic, breakdownPrompt, discussion, 0, memoryContext, expertRole, null, codebaseContext, null
+                            topic, breakdownPrompt, discussion, memoryContext, expertRole, null, codebaseContext, null
                         );
                         processAndAddAiResponse(aiResponse, expertRole, storyToBreakDown.id);
                         await new Promise(resolve => setTimeout(resolve, SEQUENTIAL_AI_CALL_DELAY_MS));
@@ -630,7 +632,7 @@ export const useAgileBloomChat = () => {
                 for (const expertRole of roundRobinOrder) {
                     const currentDiscussionState = useAgileBloomStore.getState().discussion;
                     const aiResponse = await getAiResponse(
-                        topic, finalAiInstruction, currentDiscussionState, numThoughts, memoryContext, 
+                        topic, finalAiInstruction, currentDiscussionState, memoryContext, 
                         expertRole, file, codebaseContext, null
                     );
                     processAndAddAiResponse(aiResponse, expertRole);
@@ -655,6 +657,42 @@ export const useAgileBloomChat = () => {
       processAndAddAiResponse, getRoundRobinOrder, updateNarrativeSummary, escapeForPrompt
   ]);
   
+  const handleElaborate = useCallback(async (expert: Expert, originalMessage: DiscussionMessage) => {
+    if (isLoading) return;
+
+    const userPromptText = `Elaborate on your last point, ${expert.name}.`;
+    addMessage({ expertName: ROLE_USER, text: userPromptText });
+
+    setLoading(true);
+    setError(null);
+    
+    const aiInstructionText = `Please elaborate on your previous statement: "${escapeForPrompt(originalMessage.text)}". Provide a more detailed explanation, example, or further justification. There are no word or sentence limits for this response.`;
+    
+    const { discussion, memoryContext, codebaseContext } = useAgileBloomStore.getState();
+    
+    try {
+        const aiResponse = await getAiResponse(
+            topic, 
+            aiInstructionText, 
+            discussion, 
+            memoryContext, 
+            expert.name, 
+            null, // No file for elaboration
+            codebaseContext, 
+            null, // No assigned tasks context for this
+            true // isElaboration = true
+        );
+        processAndAddAiResponse(aiResponse, expert.name);
+    } catch (error: any) {
+        console.error("Error during AI elaboration:", error);
+        addErrorMessage(error.message || "An unknown error occurred while asking the AI to elaborate.");
+    } finally {
+        setLoading(false);
+        updateNarrativeSummary();
+    }
+  }, [isLoading, topic, addMessage, addErrorMessage, setLoading, setError, processAndAddAiResponse, updateNarrativeSummary, escapeForPrompt]);
+
+
   const initiateDiscussion = (settings: Settings) => {
       storeClearChat();
       const { setTopic, setSelectedExpertRoles } = useAgileBloomStore.getState();
@@ -691,7 +729,6 @@ export const useAgileBloomChat = () => {
             topic,
             GENERATE_TASKS_FROM_CONTEXT_PROMPT,
             discussion,
-            0,
             memoryContext,
             ROLE_SCRUM_LEADER,
         );
@@ -733,7 +770,6 @@ export const useAgileBloomChat = () => {
             topic,
             compilePrompt,
             discussion,
-            0, // No thoughts needed
             memoryContext,
             expertRole,
         );
@@ -773,7 +809,7 @@ export const useAgileBloomChat = () => {
             setLoading(true);
             try {
                 const { discussion, memoryContext } = useAgileBloomStore.getState();
-                const aiResponse = await getAiResponse(topic, prompt, discussion, 0, memoryContext, ROLE_SCRUM_LEADER);
+                const aiResponse = await getAiResponse(topic, prompt, discussion, memoryContext, ROLE_SCRUM_LEADER);
                 processAndAddAiResponse(aiResponse, ROLE_SCRUM_LEADER);
             } catch(e) {
                 const err = e as Error;
@@ -843,6 +879,7 @@ export const useAgileBloomChat = () => {
   return {
     initiateDiscussion,
     sendMessage,
+    handleElaborate,
     generateTasksFromContext,
     compileDocumentationForExpert,
     updateQuestionStatusAndPotentiallyGenerateActions,

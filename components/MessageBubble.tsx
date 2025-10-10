@@ -1,9 +1,10 @@
 
+
 import React from 'react';
-import { DiscussionMessage, ExpertRole, SearchCitation } from '../types';
+import { DiscussionMessage, Expert, ExpertRole, SearchCitation } from '../types';
 import { CodeBlock } from './CodeBlock'; 
-import { ExternalLink } from 'lucide-react';
-import { ROLE_SCRUM_LEADER, ROLE_USER } from '../constants';
+import { ExternalLink, CornerDownRight } from 'lucide-react';
+import { ROLE_SCRUM_LEADER, ROLE_USER, ROLE_SYSTEM } from '../constants';
 
 const CitationLink: React.FC<{ citation: SearchCitation }> = ({ citation }) => (
   <a
@@ -18,8 +19,13 @@ const CitationLink: React.FC<{ citation: SearchCitation }> = ({ citation }) => (
   </a>
 );
 
+interface MessageBubbleProps {
+  message: DiscussionMessage;
+  onElaborate?: (expert: Expert, message: DiscussionMessage) => void;
+}
 
-export const MessageBubble: React.FC<{ message: DiscussionMessage }> = React.memo(({ message }) => {
+
+export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message, onElaborate }) => {
   const { expert, text, thoughts, work, timestamp, isError, isCommandResponse, searchCitations } = message;
   const isUser = expert.name === ROLE_USER;
 
@@ -43,6 +49,9 @@ export const MessageBubble: React.FC<{ message: DiscussionMessage }> = React.mem
                                    work.toLowerCase().includes("user story") &&
                                    work.includes("|") &&
                                    work.includes("---");
+  
+  const showElaborateButton = !isUser && expert.name !== ROLE_SYSTEM && !isError && !work;
+
 
   return (
     <div className={containerClasses}>
@@ -90,8 +99,16 @@ export const MessageBubble: React.FC<{ message: DiscussionMessage }> = React.mem
             </ul>
           </div>
         )}
-        <div className={`text-xs mt-2 text-[#95aac0] ${isUser ? "text-right" : "text-left"}`}>
-          {formattedTimestamp}
+        <div className={`flex items-center justify-between text-xs mt-2 text-[#95aac0] ${isUser ? "text-right" : "text-left"}`}>
+          {showElaborateButton ? (
+            <button 
+              onClick={() => onElaborate?.(expert, message)}
+              className="flex items-center gap-1 text-[#95aac0] hover:text-[#e2a32d] transition-colors"
+            >
+              <CornerDownRight size={14}/> Elaborate
+            </button>
+          ) : <div></div>}
+          <span>{formattedTimestamp}</span>
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 import {create} from 'zustand';
 import { DiscussionMessage, ExpertRole, UploadedFile, TrackedQuestion, QuestionStatus, TrackedTask, TaskStatus, Expert, TrackedStory, StoryStatus, StoryPriority, Settings } from '../types';
-import { DEFAULT_EXPERTS, DEFAULT_NUM_THOUGHTS, MAX_MEMORY_ENTRIES, DEFAULT_AUTO_MODE_DELAY_SECONDS, ROLE_SYSTEM, ROLE_USER, ROLE_SCRUM_LEADER } from '../constants';
+import { DEFAULT_EXPERTS, MAX_MEMORY_ENTRIES, DEFAULT_AUTO_MODE_DELAY_SECONDS, ROLE_SYSTEM, ROLE_USER, ROLE_SCRUM_LEADER } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
 import { listGitHubRepoFiles, fetchGitHubFilesContent } from '../services/gitService';
 
@@ -26,7 +26,6 @@ interface AgileBloomState {
   discussion: DiscussionMessage[];
   isLoading: boolean;
   error: string | null;
-  numThoughts: number;
   isHelpModalOpen: boolean;
   userMessageTimestamps: number[];
   isRateLimited: boolean;
@@ -50,6 +49,9 @@ interface AgileBloomState {
   selectedExpertRoles: ExpertRole[];
   lastActionWasAutoContinue: boolean;
 
+  isConciseResponseMode: boolean;
+  toggleConciseResponseMode: () => void;
+
   // Codebase Context State
   codebaseContext: string | null;
   codebaseImportStatus: CodebaseImportStatus;
@@ -64,7 +66,6 @@ interface AgileBloomState {
   addErrorMessage: (text: string) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  setNumThoughts: (num: number) => void;
   clearChat: () => void;
   toggleHelpModal: () => void;
   addUserMessageTimestamp: (timestamp: number) => void;
@@ -121,7 +122,6 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
   discussion: [],
   isLoading: false,
   error: null,
-  numThoughts: DEFAULT_NUM_THOUGHTS,
   isHelpModalOpen: false,
   userMessageTimestamps: [],
   isRateLimited: false,
@@ -139,6 +139,8 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
   experts: getInitialExperts(),
   selectedExpertRoles: [],
   lastActionWasAutoContinue: false,
+  isConciseResponseMode: true,
+  toggleConciseResponseMode: () => set((state) => ({ isConciseResponseMode: !state.isConciseResponseMode })),
   
   // Codebase state
   codebaseContext: null,
@@ -179,7 +181,6 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
   },
   setLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => set({ error, isLoading: false }),
-  setNumThoughts: (num) => set({ numThoughts: num }),
   clearChat: () => {
     set({ 
       discussion: [],

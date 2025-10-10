@@ -1,7 +1,8 @@
 
+
 import React, { useRef } from 'react';
 import useAgileBloomStore from '../store/useAgileBloomStore';
-import { Settings, HelpCircle, Trash2, Zap, ZapOff, Download, UploadCloud } from 'lucide-react'; 
+import { Settings, HelpCircle, Trash2, Zap, ZapOff, Download, UploadCloud, MessageSquarePlus, MessageSquareText } from 'lucide-react'; 
 import { MIN_AUTO_MODE_DELAY_SECONDS, MAX_AUTO_MODE_DELAY_SECONDS, DEFAULT_EXPERTS, ROLE_SYSTEM } from '../constants';
 import { DiscussionMessage, ExpertRole, Expert } from '../types';
 
@@ -10,8 +11,6 @@ export const Header: React.FC = () => {
     topic, 
     toggleHelpModal, 
     clearChat, 
-    numThoughts, 
-    setNumThoughts,
     isAutoModeEnabled,
     toggleAutoMode,
     autoModeDelaySeconds,
@@ -19,16 +18,11 @@ export const Header: React.FC = () => {
     discussion,
     importChatSession,
     addErrorMessage,
+    isConciseResponseMode,
+    toggleConciseResponseMode,
   } = useAgileBloomStore();
   const [showSettings, setShowSettings] = React.useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
-
-  const handleNumThoughtsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value, 10);
-    if (val > 0 && val <= 10) {
-      setNumThoughts(val);
-    }
-  };
 
   const handleAutoModeDelayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value, 10);
@@ -260,21 +254,6 @@ export const Header: React.FC = () => {
           <h3 className="text-md font-semibold mb-3 text-[#e2a32d]">Settings</h3>
           
           <div className="mb-4">
-            <label htmlFor="numThoughts" className="block text-sm font-medium text-[#95aac0] mb-1">
-              Thoughts per Expert: <span className="text-[#e2a32d]">{numThoughts}</span>
-            </label>
-            <input
-              type="range"
-              id="numThoughts"
-              min="1"
-              max="10"
-              value={numThoughts}
-              onChange={handleNumThoughtsChange}
-              className="w-full h-2 bg-[#5c6f7e] rounded-lg appearance-none cursor-pointer accent-[#e2a32d]"
-            />
-          </div>
-
-          <div className="mb-4">
             <div className="flex items-center justify-between">
               <label htmlFor="autoModeToggle" className="text-sm font-medium text-[#95aac0]">
                 Auto Mode
@@ -308,6 +287,28 @@ export const Header: React.FC = () => {
               />
             </div>
           )}
+
+          <div className="border-t border-[#5c6f7e] my-3"></div>
+
+          <div className="mb-4">
+            <div className="flex items-center justify-between">
+              <label htmlFor="conciseModeToggle" className="text-sm font-medium text-[#95aac0]">
+                Concise Responses
+              </label>
+              <button
+                id="conciseModeToggle"
+                onClick={toggleConciseResponseMode}
+                className={`p-1 rounded-full transition-colors ${
+                  isConciseResponseMode ? 'bg-green-500 hover:bg-green-600' : 'bg-[#5c6f7e] hover:bg-gray-500'
+                }`}
+                title={isConciseResponseMode ? 'Disable Concise Mode' : 'Enable Concise Mode'}
+              >
+                {isConciseResponseMode ? <MessageSquareText size={18} className="text-white" /> : <MessageSquarePlus size={18} className="text-[#95aac0]" />}
+              </button>
+            </div>
+             <p className="text-xs text-gray-400 mt-1 pl-1">Keep AI responses brief (~47 words). Use the "Elaborate" button on a message for more detail.</p>
+          </div>
+
 
           <button 
             onClick={() => setShowSettings(false)}

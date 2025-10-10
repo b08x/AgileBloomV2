@@ -6,6 +6,7 @@ import { LoadingSpinner } from './LoadingSpinner';
 import { HelpModal } from './HelpModal';
 import { RightSidebarContainer } from './RightSidebarContainer';
 import { LeftSidebarContainer } from './LeftSidebarContainer';
+import { useAgileBloomChat } from '../hooks/useAgileBloomChat';
 
 export const ChatInterface: React.FC = () => {
   const { 
@@ -14,6 +15,7 @@ export const ChatInterface: React.FC = () => {
     error, 
     isHelpModalOpen, 
   } = useAgileBloomStore();
+  const { handleElaborate } = useAgileBloomChat();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -44,7 +46,7 @@ export const ChatInterface: React.FC = () => {
               </div>
             )}
             {discussion.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
+              <MessageBubble key={msg.id} message={msg} onElaborate={handleElaborate} />
             ))}
             {isLoading && (
               <div className="flex justify-center py-4">

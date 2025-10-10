@@ -20,14 +20,14 @@ const escapeForJsonString = (str: string | null | undefined): string => {
 function buildSystemPrompt(
   currentTopic: string | null,
   discussionHistory: DiscussionMessage[],
-  numThoughts: number,
   memoryContext: string[],
   emulateExpertAs: ExpertRole | undefined,
   initialContext: string | null | undefined,
   assignedTasksContext: string | null | undefined,
-  currentUserMessageOrCommand: string
+  currentUserMessageOrCommand: string,
+  isElaboration: boolean
 ): string {
-    const { experts, selectedExpertRoles } = useAgileBloomStore.getState();
+    const { experts, selectedExpertRoles, isConciseResponseMode } = useAgileBloomStore.getState();
     let emulationInstructions = "";
     let responsePersonaInstruction = "Determine who should respond based on the flow of an Agile Daily Scrum, the current user input/command, and conversation history.";
     let specificTaskInstructions = "";
@@ -61,13 +61,19 @@ function buildSystemPrompt(
         ? `\n--- Start of Your Assigned Tasks ---\nThis is a list of tasks currently assigned to you. When responding to commands like /show-work, please focus your response on these tasks.\n\n${escapeForJsonString(assignedTasksContext.trim())}\n--- End of Your Assigned Tasks ---\n`
         : "";
 
+    let concisenessInstruction = "";
+    if (isElaboration) {
+        concisenessInstruction = "The user has asked you to elaborate. Provide a detailed and comprehensive response, ignoring any previous instructions about conciseness. There are no word or sentence limits for this response.";
+    } else if (isConciseResponseMode) {
+        concisenessInstruction = "IMPORTANT: Your main 'message' response MUST be concise, containing no more than 47 words AND no more than 2 sentences. Be direct and to the point. You can provide more detailed analysis or tangential ideas in your 'thoughts' array if needed.";
+    }
+
     const historyFormatter = (discussion: DiscussionMessage[], maxTurns = 10): string => {
         return discussion.slice(-maxTurns).map(msg => `${escapeForJsonString(msg.expert.name)} (${msg.expert.emoji}): ${escapeForJsonString(msg.text)}${msg.work ? `\nWORK:\n${escapeForJsonString(msg.work)}` : ''}${msg.searchCitations && msg.searchCitations.length > 0 ? `\n(Sources: ${escapeForJsonString(msg.searchCitations.map(c => c.title).join(', '))})` : ''}`).join('\n\n');
     }
 
     return INITIAL_SYSTEM_PROMPT_TEMPLATE
         .replace('{input_topic}', escapeForJsonString(currentTopic) || "No topic set yet. Await user to set a topic with /topic command.")
-        .replace(new RegExp('{num_thoughts}', 'g'), String(numThoughts))
         .replace('{history}', historyFormatter(discussionHistory))
         .replace('{{emulation_instructions}}', emulationInstructions)
         .replace('{{response_persona_instruction}}', responsePersonaInstruction)
@@ -75,6 +81,7 @@ function buildSystemPrompt(
         .replace('{persistent_memory_context}', formattedMemory)
         .replace('{{additional_context_section}}', additionalContextSection)
         .replace('{{assigned_tasks_section}}', assignedTasksSection)
+        .replace('{{conciseness_instruction}}', concisenessInstruction)
         .replace('{expert_list}', expertListForPrompt);
 }
 
@@ -270,12 +277,12 @@ export async function getAiResponse(
   currentTopic: string | null,
   currentUserMessageOrCommand: string, 
   discussionHistory: DiscussionMessage[],
-  numThoughts: number,
   memoryContext: string[],
   emulateExpertAs?: ExpertRole,
   uploadedFile?: UploadedFile | null,
   initialContext?: string | null,
-  assignedTasksContext?: string | null
+  assignedTasksContext?: string | null,
+  isElaboration: boolean = false
 ): Promise<GeminiResponseJson> {
   
     const { settings, experts } = useAgileBloomStore.getState();
@@ -297,8 +304,9 @@ export async function getAiResponse(
     }
 
     const systemPrompt = buildSystemPrompt(
-        currentTopic, discussionHistory, numThoughts, memoryContext,
-        emulateExpertAs, initialContext, assignedTasksContext, currentUserMessageOrCommand
+        currentTopic, discussionHistory, memoryContext,
+        emulateExpertAs, initialContext, assignedTasksContext, currentUserMessageOrCommand,
+        isElaboration
     );
 
     const aiCall = async (): Promise<GeminiResponseJson> => {

@@ -47,8 +47,6 @@ export const AVAILABLE_COMMANDS: Command[] = [
   { name: "/clear", arguments: "", description: "Clears the current chat. To start a new topic, refresh the page.", example: "/clear" },
 ];
 
-export const DEFAULT_NUM_THOUGHTS = 1;
-
 // Rate limiting for user text input
 export const RATE_LIMIT_MAX_MESSAGES_PER_WINDOW = 5;
 export const RATE_LIMIT_WINDOW_SECONDS = 10;
@@ -193,10 +191,12 @@ User Commands & Expected AI Behavior (Respond as the emulated expert for your tu
 Conversation History (last few turns):
 {history}
 
+{{conciseness_instruction}}
+
 Response Instructions:
 1. Current topic: {input_topic}.
 2. {{response_persona_instruction}}
-3. For regular turns, provide a main message and {num_thoughts} "thoughts". These are critical for generating new questions.
+3. For regular turns, provide a main message and a "thoughts" array containing just ONE single, pointed question to stimulate further discussion. This is critical for generating new discussion points.
 4. **Action Generation (Stories/Tasks)**: When asked to generate stories or tasks, your primary output MUST be in the \`stories\` or \`tasks\` array fields of your JSON response. Provide a brief summary in the \`message\` field.
    - For stories, use this JSON structure: \`{"userStory": "...", "benefit": "...", "acceptanceCriteria": ["...", "..."], "priority": "Medium", "sprintPoints": 5}\`. Priority and sprintPoints are optional but helpful.
    - For tasks, use this JSON structure: \`{"description": "A clear, actionable task", "assignedTo": "Engineer"}\`.
@@ -208,7 +208,7 @@ Response Instructions:
        "expert": "Engineer",
        "emoji": "👨‍💻",
        "message": "Response...",
-       "thoughts": ["Thought 1"],
+       "thoughts": ["A single, pointed question?"],
        "work": null,
        "memoryEntry": "Key takeaway",
        "tasks": [],
