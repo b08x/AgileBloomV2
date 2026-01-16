@@ -81,7 +81,7 @@ export const TaskItemCard: React.FC<TaskItemCardProps> = ({ task, onUpdate, onRe
                             {priorityCfg.icon}
                             <span className="ml-1.5">{priorityCfg.label}</span>
                         </button>
-                        <div className="absolute bottom-full mb-2 -left-2 w-32 bg-[#333e48] border border-[#5c6f7e] rounded-lg shadow-xl z-10 hidden group-hover:block animate-fadeIn">
+                        <div className="absolute bottom-full mb-2 -left-2 w-32 bg-[#333e48] border border-[#5c6f7e] rounded-lg shadow-2xl z-50 hidden group-hover:block animate-fadeIn">
                             <ul className="py-1 text-sm text-gray-200">
                                 {(['High', 'Medium', 'Low'] as TaskPriority[]).map(p => (
                                     <li key={p}>

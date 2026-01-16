@@ -82,7 +82,7 @@ export const QuestionItemCard: React.FC<QuestionItemCardProps> = ({ question, is
             <MoreVertical size={18} />
         </button>
         {isMenuOpen && (
-            <div className="absolute top-full right-0 mt-2 w-48 bg-[#333e48] border border-[#5c6f7e] rounded-lg shadow-xl z-10 animate-fadeIn">
+            <div className="absolute top-full right-0 mt-2 w-48 bg-[#333e48] border border-[#5c6f7e] rounded-lg shadow-2xl z-50 animate-fadeIn">
                 <ul className="py-1 text-sm text-gray-200">
                     <li className="px-3 py-1 text-xs text-[#95aac0]">Actions</li>
                     <li>

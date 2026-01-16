@@ -40,9 +40,9 @@ const ExpertQuestionGroup: React.FC<{
   };
 
   return (
-    <div className="bg-[#333e48]/50 rounded-lg border border-[#5c6f7e] overflow-hidden">
+    <div className="bg-[#333e48]/50 rounded-lg border border-[#5c6f7e]">
       <header 
-        className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#333e48] transition-colors"
+        className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#333e48] transition-colors rounded-t-lg"
         onClick={() => setIsCollapsed(!isCollapsed)}
       >
         <div className="flex items-center gap-2">
@@ -153,7 +153,7 @@ export const TrackedQuestionsSidebar: React.FC = () => {
                 <p className="text-xs text-[#95aac0]">Questions raised by the AI team during discussion.</p>
             </header>
 
-            <div className="flex-grow overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-[#5c6f7e] scrollbar-track-[#212934] space-y-3">
+            <div className="flex-grow overflow-y-auto p-2 pb-32 scrollbar-thin scrollbar-thumb-[#5c6f7e] scrollbar-track-[#212934] space-y-3">
                 {trackedQuestions.length > 0 && selectedExpertRoles.length > 0 ? (
                     selectedExpertRoles.map(expertRole => (
                       <ExpertQuestionGroup
