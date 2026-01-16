@@ -1,7 +1,6 @@
 
-
 import {create} from 'zustand';
-import { DiscussionMessage, ExpertRole, UploadedFile, TrackedQuestion, QuestionStatus, TrackedTask, TaskStatus, Expert, TrackedStory, StoryStatus, StoryPriority, Settings } from '../types';
+import { DiscussionMessage, ExpertRole, UploadedFile, TrackedQuestion, QuestionStatus, TrackedTask, TaskStatus, Expert, TrackedStory, StoryStatus, StoryPriority, Settings, FileEdit } from '../types';
 import { DEFAULT_EXPERTS, MAX_MEMORY_ENTRIES, DEFAULT_AUTO_MODE_DELAY_SECONDS, ROLE_SYSTEM, ROLE_USER, ROLE_SCRUM_LEADER } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
 import { listGitHubRepoFiles, fetchGitHubFilesContent } from '../services/gitService';
@@ -53,12 +52,14 @@ interface AgileBloomState {
   toggleConciseResponseMode: () => void;
 
   // Codebase Context State
+  repoUrl: string | null;
   codebaseContext: string | null;
   codebaseImportStatus: CodebaseImportStatus;
   codebaseImportMessage: string | null;
   repoExcludePatterns: string;
   repoFiles: { path: string; size: number }[];
   selectedRepoFiles: Set<string>;
+  proposedFileEdits: FileEdit[];
 
   setCodebaseContext: (context: string | null) => void;
   setTopic: (topic: string) => void;
@@ -75,13 +76,15 @@ interface AgileBloomState {
   setUploadedFile: (file: UploadedFile | null) => void;
   clearUploadedFile: () => void;
   
-  // New Codebase Actions
+  // Codebase Actions
   setRepoExcludePatterns: (patterns: string) => void;
   listRepoFiles: (repoUrl: string) => Promise<void>;
-  confirmRepoFileSelection: (repoUrl: string) => Promise<void>;
+  confirmRepoFileSelection: () => Promise<void>;
   toggleRepoFileSelection: (path: string, select?: boolean) => void;
   toggleSelectAllRepoFiles: (select: boolean) => void;
   clearRepoData: () => void;
+  addProposedFileEdit: (edit: FileEdit) => void;
+  clearProposedFileEdits: () => void;
 
 
   addTrackedQuestion: (question: Omit<TrackedQuestion, 'id' | 'timestamp' | 'status'>) => void;
@@ -143,12 +146,14 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
   toggleConciseResponseMode: () => set((state) => ({ isConciseResponseMode: !state.isConciseResponseMode })),
   
   // Codebase state
+  repoUrl: null,
   codebaseContext: null,
   codebaseImportStatus: 'idle',
   codebaseImportMessage: null,
   repoExcludePatterns: `# Dependency lock files\npackage-lock.json\nyarn.lock\n\n# Build output\n/dist/\n/build/\n\n# Logs\n*.log`,
   repoFiles: [],
   selectedRepoFiles: new Set(),
+  proposedFileEdits: [],
 
   setCodebaseContext: (context) => set({ codebaseContext: context }),
   setTopic: (topic) => set({ topic, error: null }),
@@ -219,7 +224,7 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
   setRepoExcludePatterns: (patterns) => set({ repoExcludePatterns: patterns }),
   listRepoFiles: async (repoUrl) => {
       get().clearRepoData(); // Clear previous results before fetching new list
-      set({ codebaseImportStatus: 'loading_list', codebaseImportMessage: 'Fetching repository file list...' });
+      set({ repoUrl, codebaseImportStatus: 'loading_list', codebaseImportMessage: 'Fetching repository file list...' });
       try {
           const files = await listGitHubRepoFiles(repoUrl, get().repoExcludePatterns);
           set({
@@ -227,7 +232,8 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
               codebaseImportStatus: 'success_list',
               codebaseImportMessage: `Found ${files.length} files. Select files to include in context.`,
           });
-          get().toggleSelectAllRepoFiles(true); // Select all by default
+          // User requested all de-selected by default
+          get().toggleSelectAllRepoFiles(false); 
       } catch (error) {
           const message = error instanceof Error ? error.message : 'An unknown error occurred.';
           set({
@@ -236,8 +242,10 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
           });
       }
   },
-  confirmRepoFileSelection: async (repoUrl) => {
-      const { selectedRepoFiles } = get();
+  confirmRepoFileSelection: async () => {
+      const { selectedRepoFiles, repoUrl } = get();
+      if (!repoUrl) return;
+
       if (selectedRepoFiles.size === 0) {
           set({
               codebaseContext: null,
@@ -287,6 +295,7 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
   },
   clearRepoData: () => {
       set({
+          repoUrl: null,
           codebaseContext: null,
           codebaseImportStatus: 'idle',
           codebaseImportMessage: null,
@@ -294,6 +303,8 @@ const useAgileBloomStore = create<AgileBloomState>((set, get) => ({
           selectedRepoFiles: new Set(),
       });
   },
+  addProposedFileEdit: (edit) => set(state => ({ proposedFileEdits: [...state.proposedFileEdits, edit] })),
+  clearProposedFileEdits: () => set({ proposedFileEdits: [] }),
 
 
   addTrackedQuestion: (questionData) => {

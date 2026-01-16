@@ -1,3 +1,4 @@
+
 import { Expert, ExpertRole, Command, AiProvider } from './types';
 
 // Define default roles as string constants for type safety and easy reference
@@ -11,7 +12,7 @@ export const ROLE_SCRUM_LEADER: ExpertRole = "Scrum Leader";
 export const DEFAULT_EXPERTS: Record<ExpertRole, Expert> = {
   [ROLE_SYSTEM]: { name: ROLE_SYSTEM, emoji: "⚙️", description: "System messages and announcements.", bgColor: "bg-[#333e48]", textColor: "text-gray-200" },
   [ROLE_USER]: { name: ROLE_USER, emoji: "👤", description: "The user facilitating the discussion.", bgColor: "bg-[#c36e26]", textColor: "text-gray-200" },
-  [ROLE_ENGINEER]: { name: ROLE_ENGINEER, emoji: "👨‍💻", description: "A neat and creative programmer with expertise in Bash, Python, and Ansible.", bgColor: "bg-[#333e48]", textColor: "text-gray-200" },
+  [ROLE_ENGINEER]: { name: ROLE_ENGINEER, emoji: "👨‍💻", description: "A neat programmer and Codebase Agent. Responsible for analyzing code and proposing specific file edits and additions.", bgColor: "bg-[#333e48]", textColor: "text-gray-200" },
   [ROLE_ARTIST]: { name: ROLE_ARTIST, emoji: "🧑‍🎨", description: "A design expert proficient in CSS, JS, and HTML.", bgColor: "bg-[#333e48]", textColor: "text-gray-200" },
   [ROLE_LINGUIST]: { name: ROLE_LINGUIST, emoji: "🧑‍✒️", description: "A pragmatic devil's advocate with expertise in linguistics, design patterns and the Ruby language.", bgColor: "bg-[#333e48]", textColor: "text-gray-200" },
   [ROLE_SCRUM_LEADER]: { name: ROLE_SCRUM_LEADER, emoji: "🤔", description: "Manages the product backlog and time-boxing.", bgColor: "bg-[#333e48]", textColor: "text-gray-200" },
@@ -200,8 +201,10 @@ Response Instructions:
 4. **Action Generation (Stories/Tasks)**: When asked to generate stories or tasks, your primary output MUST be in the \`stories\` or \`tasks\` array fields of your JSON response. Provide a brief summary in the \`message\` field.
    - For stories, use this JSON structure: \`{"userStory": "...", "benefit": "...", "acceptanceCriteria": ["...", "..."], "priority": "Medium", "sprintPoints": 5}\`. Priority and sprintPoints are optional but helpful.
    - For tasks, use this JSON structure: \`{"description": "A clear, actionable task", "assignedTo": "Engineer"}\`.
-5. **Memory Contribution**: If your response is a key decision or summary, include a concise version in the \`memoryEntry\` field.
-6. **JSON Output**: Your entire response MUST be a single, valid JSON object. Do NOT add any text outside this JSON object. All string values must be properly escaped (e.g., newlines as '\\\\n', quotes as '\\"').
+5. **Codebase Edits**: If you are the Engineer and propose changes to the codebase, include a \`fileEdits\` array.
+   - Structure: \`{"path": "src/file.js", "content": "full content...", "explanation": "why this change?", "status": "modified"}\`. Status can be 'new', 'modified', or 'deleted'.
+6. **Memory Contribution**: If your response is a key decision or summary, include a concise version in the \`memoryEntry\` field.
+7. **JSON Output**: Your entire response MUST be a single, valid JSON object. Do NOT add any text outside this JSON object. All string values must be properly escaped (e.g., newlines as '\\\\n', quotes as '\\"').
    Example format:
    \`\`\`json
    {
@@ -210,6 +213,7 @@ Response Instructions:
        "message": "Response...",
        "thoughts": ["A single, pointed question?"],
        "work": null,
+       "fileEdits": [],
        "memoryEntry": "Key takeaway",
        "tasks": [],
        "stories": []

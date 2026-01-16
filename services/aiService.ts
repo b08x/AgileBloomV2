@@ -1,9 +1,10 @@
+
 import { GoogleGenAI, GenerateContentResponse, Part } from "@google/genai";
 import { createMistral } from '@ai-sdk/mistral';
 import { generateText } from 'ai';
 import OpenAI from 'openai';
 import { DiscussionMessage, Expert, ExpertRole, GeminiResponseJson, UploadedFile, AiProvider } from '../types';
-import { INITIAL_SYSTEM_PROMPT_TEMPLATE, FISH_STORY_TASK_ANALYSIS_PROMPT, SUPPORTED_IMAGE_MIME_TYPES, ROLE_SCRUM_LEADER } from '../constants';
+import { INITIAL_SYSTEM_PROMPT_TEMPLATE, FISH_STORY_TASK_ANALYSIS_PROMPT, SUPPORTED_IMAGE_MIME_TYPES, ROLE_SCRUM_LEADER, ROLE_ENGINEER } from '../constants';
 import { getModelConfigById } from './modelService';
 import useAgileBloomStore from '../store/useAgileBloomStore';
 
@@ -27,7 +28,7 @@ function buildSystemPrompt(
   currentUserMessageOrCommand: string,
   isElaboration: boolean
 ): string {
-    const { experts, selectedExpertRoles, isConciseResponseMode } = useAgileBloomStore.getState();
+    const { experts, selectedExpertRoles, isConciseResponseMode, codebaseContext } = useAgileBloomStore.getState();
     let emulationInstructions = "";
     let responsePersonaInstruction = "Determine who should respond based on the flow of an Agile Daily Scrum, the current user input/command, and conversation history.";
     let specificTaskInstructions = "";
@@ -40,11 +41,15 @@ function buildSystemPrompt(
         emulationInstructions = `\nYou are currently emulating: ${escapeForJsonString(expertToEmulate.name)} (${expertToEmulate.emoji}). Your response MUST be from this expert's perspective.`;
         responsePersonaInstruction = `You MUST respond as ${escapeForJsonString(expertToEmulate.name)}. The "expert" field in your JSON output MUST be "${escapeForJsonString(expertToEmulate.name)}".`;
 
+        if (emulateExpertAs === ROLE_ENGINEER && codebaseContext) {
+            specificTaskInstructions += `\n\nCODEBASE AGENT MODE: You have access to the project's codebase context. You are the designated agent for adding or editing files. If the user asks for code changes, or if you identify necessary edits, provide them in the 'fileEdits' array of your JSON response. For each edit, specify the full 'path', the new 'content', a brief 'explanation', and a 'status' (new, modified, or deleted).`;
+        }
+
         if (emulateExpertAs === ROLE_SCRUM_LEADER) {
             if (currentUserMessageOrCommand.toLowerCase().includes("perform a fish analysis on the following item")) {
-                specificTaskInstructions = `\nFollow these specific instructions for the FISH Analysis on the item provided by the user: \n${FISH_STORY_TASK_ANALYSIS_PROMPT}`;
+                specificTaskInstructions += `\nFollow these specific instructions for the FISH Analysis on the item provided by the user: \n${FISH_STORY_TASK_ANALYSIS_PROMPT}`;
             } else if (currentUserMessageOrCommand.toLowerCase().startsWith("/backlog")) {
-                specificTaskInstructions = `\nUser command is /backlog. Provide a health check of the product backlog. In your main 'message', summarize the number of stories and tasks in each status. Point out any items that seem high-risk, poorly defined, or have been inactive for a long time. Suggest 1-2 items that might benefit from a detailed \`/analyze {id}\` command.`;
+                specificTaskInstructions += `\nUser command is /backlog. Provide a health check of the product backlog. In your main 'message', summarize the number of stories and tasks in each status. Point out any items that seem high-risk, poorly defined, or have been inactive for a long time. Suggest 1-2 items that might benefit from a detailed \`/analyze {id}\` command.`;
             }
         }
     }
@@ -57,6 +62,10 @@ function buildSystemPrompt(
         ? `\n--- Start of Additional Context ---\nThis initial context was provided by the user to set the stage for the entire discussion:\n\n${escapeForJsonString(initialContext.trim())}\n\n--- End of Additional Context ---\n`
         : "";
     
+    const codebaseSection = (codebaseContext && codebaseContext.trim() !== '')
+        ? `\n--- Start of Codebase Context ---\nThis is the content of the project's source code files provided for reference. You can reference or propose edits to these files.\n\n${escapeForJsonString(codebaseContext.trim())}\n--- End of Codebase Context ---\n`
+        : "";
+
     const assignedTasksSection = (assignedTasksContext && assignedTasksContext.trim() !== '')
         ? `\n--- Start of Your Assigned Tasks ---\nThis is a list of tasks currently assigned to you. When responding to commands like /show-work, please focus your response on these tasks.\n\n${escapeForJsonString(assignedTasksContext.trim())}\n--- End of Your Assigned Tasks ---\n`
         : "";
@@ -79,7 +88,7 @@ function buildSystemPrompt(
         .replace('{{response_persona_instruction}}', responsePersonaInstruction)
         .replace('{{specific_task_instructions}}', specificTaskInstructions)
         .replace('{persistent_memory_context}', formattedMemory)
-        .replace('{{additional_context_section}}', additionalContextSection)
+        .replace('{{additional_context_section}}', additionalContextSection + codebaseSection)
         .replace('{{assigned_tasks_section}}', assignedTasksSection)
         .replace('{{conciseness_instruction}}', concisenessInstruction)
         .replace('{expert_list}', expertListForPrompt);
@@ -101,7 +110,6 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
 
             if (errorMessage.includes('quota')) {
                 console.error("Quota exceeded error detected. Halting further API requests.");
-                // This state will be handled at the component level now
                 throw new Error("Failed to call the AI API, quota exceeded. Please try again later.");
             }
             if (retries === MAX_RETRIES) {

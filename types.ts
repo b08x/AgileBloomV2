@@ -54,12 +54,20 @@ export interface SearchCitation {
   title: string;
 }
 
+export interface FileEdit {
+  path: string;
+  content: string;
+  explanation?: string;
+  status: 'new' | 'modified' | 'deleted';
+}
+
 export interface DiscussionMessage {
   id: string;
   expert: Expert;
   text: string;
   thoughts?: string[];
   work?: string; // For code, markdown tables, etc.
+  fileEdits?: FileEdit[]; // Proposed changes to the codebase
   isCommandResponse?: boolean;
   timestamp: number;
   isError?: boolean;
@@ -93,6 +101,7 @@ export interface GeminiResponseJson {
   message: string;
   thoughts?: string[];
   work?: string;
+  fileEdits?: FileEdit[];
   isCommandResponse?: boolean;
   memoryEntry?: string | null; 
   groundingData?: Array<{ web: { uri: string; title: string; } }> | null;

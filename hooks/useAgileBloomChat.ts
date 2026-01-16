@@ -1,9 +1,8 @@
 
-
 import { useCallback, useEffect, useRef } from 'react';
 import useAgileBloomStore from '../store/useAgileBloomStore';
 import { getAiResponse } from '../services/aiService';
-import { Expert, ExpertRole, GeminiResponseJson, CommandHandlerResult, UploadedFile, SearchCitation, DiscussionMessage, TrackedQuestion, QuestionStatus, TaskStatus, TrackedTask, GeminiGeneratedTask, GeminiGeneratedStory, StoryStatus, Settings } from '../types';
+import { Expert, ExpertRole, GeminiResponseJson, CommandHandlerResult, UploadedFile, SearchCitation, DiscussionMessage, TrackedQuestion, QuestionStatus, TaskStatus, TrackedTask, GeminiGeneratedTask, GeminiGeneratedStory, StoryStatus, Settings, FileEdit } from '../types';
 import { 
     DEFAULT_EXPERTS, 
     AVAILABLE_COMMANDS,
@@ -19,6 +18,7 @@ import {
     ROLE_SYSTEM,
     ROLE_USER,
     ROLE_SCRUM_LEADER,
+    ROLE_ENGINEER,
 } from '../constants';
 
 
@@ -92,6 +92,7 @@ export const useAgileBloomChat = () => {
     setNarrativeSummary,
     setSummaryLoading,
     setLastActionWasAutoContinue,
+    addProposedFileEdit,
   } = useAgileBloomStore();
 
   const rateLimitTimeoutRef = useRef<number | null>(null);
@@ -189,12 +190,22 @@ export const useAgileBloomChat = () => {
       text: aiResponse.message,
       thoughts: aiResponse.thoughts,
       work: aiResponse.work,
+      fileEdits: aiResponse.fileEdits,
       isCommandResponse: isCmdResponse,
       searchCitations: searchCitations,
     });
 
     if (aiResponse.memoryEntry && typeof aiResponse.memoryEntry === 'string' && aiResponse.memoryEntry.trim() !== '') {
       addMemoryEntry(aiResponse.memoryEntry.trim());
+    }
+
+    if (aiResponse.fileEdits && aiResponse.fileEdits.length > 0 && expertNameKey === ROLE_ENGINEER) {
+        aiResponse.fileEdits.forEach(edit => addProposedFileEdit(edit));
+        addMessage({
+            expertName: ROLE_SYSTEM,
+            text: `The Engineer has proposed ${aiResponse.fileEdits.length} file change(s) in the codebase. View them in the 'Codebase' tab.`,
+            isCommandResponse: true,
+        });
     }
 
     if (aiResponse.thoughts && aiResponse.thoughts.length > 0 && addedMessage.expert.name !== ROLE_SYSTEM) {
@@ -300,7 +311,7 @@ export const useAgileBloomChat = () => {
         });
     }
 
-  }, [addMessage, addErrorMessage, addMemoryEntry, addTrackedQuestion, addTrackedStory, addTrackedTask, store]);
+  }, [addMessage, addErrorMessage, addMemoryEntry, addTrackedQuestion, addTrackedStory, addTrackedTask, addProposedFileEdit, store]);
 
   const updateNarrativeSummary = useCallback(async () => {
     const { discussion, topic, memoryContext } = useAgileBloomStore.getState();
