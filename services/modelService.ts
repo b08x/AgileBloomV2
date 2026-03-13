@@ -1,4 +1,6 @@
 import { AIModelConfig, AiProvider, Settings } from '../types';
+import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
 
 export const PROVIDERS: Record<AiProvider, { name: string; website: string; logo: string; }> = {
     [AiProvider.Google]: { name: "Google", website: "https://aistudio.google.com/", logo: "💎" },
@@ -129,16 +131,84 @@ export const getModelConfigById = (modelId: string): AIModelConfig | undefined =
 
 /**
  * Fetches a list of available models dynamically from a provider.
- * This is a placeholder for a real implementation.
  */
 export const fetchAvailableModels = async (settings: Settings): Promise<string[]> => {
   console.log("Fetching dynamic models for", settings.provider);
-  // In a real app, this would make an API call to the provider's /models endpoint.
-  // For now, we'll simulate a delay and return the statically defined models for that provider.
-  await new Promise(resolve => setTimeout(resolve, 1000)); 
-  const staticModels = fetchModelsForProvider(settings.provider);
-  if (staticModels.length === 0) {
-    throw new Error(`No models configured for ${settings.provider}.`);
+  const apiKey = settings.apiKey[settings.provider];
+  
+  if (!apiKey) {
+    throw new Error(`API Key is missing for ${settings.provider}.`);
   }
-  return staticModels.map(m => m.id);
+
+  let fetchedModels: { id: string; name: string }[] = [];
+
+  try {
+    switch (settings.provider) {
+      case AiProvider.Google: {
+        const ai = new GoogleGenAI({ apiKey });
+        const response = await ai.models.list();
+        for await (const model of response) {
+          const id = model.name.replace('models/', '');
+          fetchedModels.push({ id, name: model.displayName || id });
+        }
+        break;
+      }
+      case AiProvider.OpenAI: {
+        const openai = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
+        const response = await openai.models.list();
+        fetchedModels = response.data.map(m => ({ id: m.id, name: m.id }));
+        break;
+      }
+      case AiProvider.Mistral: {
+        const res = await fetch('https://api.mistral.ai/v1/models', {
+          headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        if (!res.ok) throw new Error(`Mistral API error: ${res.statusText}`);
+        const data = await res.json();
+        fetchedModels = data.data.map((m: any) => ({ id: m.id, name: m.id }));
+        break;
+      }
+      case AiProvider.OpenRouter: {
+        const res = await fetch('https://openrouter.ai/api/v1/models', {
+          headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        if (!res.ok) throw new Error(`OpenRouter API error: ${res.statusText}`);
+        const data = await res.json();
+        fetchedModels = data.data.map((m: any) => ({ id: m.id, name: m.name || m.id }));
+        break;
+      }
+    }
+  } catch (error) {
+    console.error(`Error fetching models for ${settings.provider}:`, error);
+    // Fallback to static models if dynamic fetching fails
+    const staticModels = fetchModelsForProvider(settings.provider);
+    if (staticModels.length > 0) {
+      console.warn(`Falling back to static models for ${settings.provider}`);
+      return staticModels.map(m => m.id);
+    }
+    throw error;
+  }
+
+  // Add missing models to ALL_MODELS_DB
+  for (const model of fetchedModels) {
+    if (!ALL_MODELS_DB.find(m => m.id === model.id)) {
+      ALL_MODELS_DB.push({
+        id: model.id,
+        name: model.name,
+        provider: settings.provider,
+        description: `Dynamically fetched model from ${settings.provider}`,
+        supportsSearch: false,
+        supportsVision: false,
+        strengths: [],
+        parameters: [
+          { id: 'temperature', name: 'Temperature', type: 'slider', min: 0, max: 2, step: 0.1, defaultValue: 0.7 },
+        ]
+      });
+    }
+  }
+
+  // Update the cache for this provider
+  modelCache.set(settings.provider, ALL_MODELS_DB.filter(m => m.provider === settings.provider));
+
+  return fetchedModels.map(m => m.id);
 };

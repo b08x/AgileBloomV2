@@ -1,23 +1,22 @@
-import React, { Dispatch, SetStateAction } from 'react';
+import React, { useState, useEffect, Dispatch, SetStateAction } from 'react';
 import { Cpu, Loader2, CheckCircle, XCircle, KeyRound, Loader } from 'lucide-react';
-import { AIModelConfig, AiProvider } from '../types';
+import { AIModelConfig, AiProvider, Settings } from '../types';
 import { SliderInput } from './SliderInput';
+import { validateApiKey } from '../services/validationService';
+import { fetchAvailableModels, fetchModelsForProvider, getModelConfigById } from '../services/modelService';
 
 // Define Props interface for clarity
 interface AIConfigSidebarProps {
   selectedProvider: AiProvider;
   setSelectedProvider: (provider: AiProvider) => void;
-  availableModelsForProvider: AIModelConfig[];
   selectedModelId: string;
   setSelectedModelId: (id: string) => void;
-  modelsLoading: boolean;
-  modelsError: string | null;
   modelConfigParams: Record<string, number>;
   setModelConfigParams: Dispatch<SetStateAction<Record<string, number>>>;
   userApiKeys: Partial<Record<AiProvider, string>>;
   setUserApiKeys: Dispatch<SetStateAction<Partial<Record<AiProvider, string>>>>;
   apiKeyValidation: Partial<Record<AiProvider, { status: 'unchecked' | 'pending' | 'valid' | 'invalid'; error?: string }>>;
-  handleValidateKey: (provider: AiProvider) => void;
+  setApiKeyValidation: Dispatch<SetStateAction<Partial<Record<AiProvider, { status: 'unchecked' | 'pending' | 'valid' | 'invalid'; error?: string }>>>>;
   isQuotaExceeded: boolean;
   setQuotaExceeded: (isExceeded: boolean) => void;
   enableGeminiPreprocessing: boolean;
@@ -92,15 +91,97 @@ const ApiKeyInput: React.FC<{
 export const AIConfigSidebar: React.FC<AIConfigSidebarProps> = (props) => {
   const {
       selectedProvider, setSelectedProvider,
-      availableModelsForProvider, selectedModelId, setSelectedModelId,
-      modelsLoading, modelsError,
+      selectedModelId, setSelectedModelId,
       modelConfigParams, setModelConfigParams,
       userApiKeys, setUserApiKeys,
-      apiKeyValidation, handleValidateKey,
+      apiKeyValidation, setApiKeyValidation,
       isQuotaExceeded, setQuotaExceeded,
       enableGeminiPreprocessing, setEnableGeminiPreprocessing,
   } = props;
   
+  const [availableModelsForProvider, setAvailableModelsForProvider] = useState<AIModelConfig[]>([]);
+  const [modelsLoading, setModelsLoading] = useState<boolean>(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+
+  const handleValidateKey = async (provider: AiProvider) => {
+    const key = userApiKeys[provider];
+    if (!key) return;
+
+    setApiKeyValidation(prev => ({ ...prev, [provider]: { status: 'pending' } }));
+    const result = await validateApiKey(provider, key);
+    setApiKeyValidation(prev => ({ 
+      ...prev, 
+      [provider]: { 
+        status: result.isValid ? 'valid' : 'invalid',
+        error: result.error,
+      }
+    }));
+    if (!result.isValid && result.error?.toLowerCase().includes('quota')) {
+      setQuotaExceeded(true);
+    }
+  };
+
+  useEffect(() => {
+    if (userApiKeys[selectedProvider] && (!apiKeyValidation[selectedProvider] || apiKeyValidation[selectedProvider]?.status === 'unchecked')) {
+      handleValidateKey(selectedProvider);
+    }
+  }, [selectedProvider]);
+
+  useEffect(() => {
+    if (enableGeminiPreprocessing && userApiKeys[AiProvider.Google] && (!apiKeyValidation[AiProvider.Google] || apiKeyValidation[AiProvider.Google]?.status === 'unchecked')) {
+      handleValidateKey(AiProvider.Google);
+    }
+  }, [enableGeminiPreprocessing]);
+
+  useEffect(() => {
+    const fetchModels = async () => {
+      if (apiKeyValidation[selectedProvider]?.status === 'valid') {
+        setModelsLoading(true);
+        setModelsError(null);
+        try {
+          const modelIds = await fetchAvailableModels({ provider: selectedProvider, apiKey: userApiKeys } as Settings);
+          const models = modelIds.map(id => getModelConfigById(id)).filter(Boolean) as AIModelConfig[];
+          setAvailableModelsForProvider(models);
+          if (models.length > 0 && !models.find(m => m.id === selectedModelId)) {
+            setSelectedModelId(models[0].id);
+          } else if (models.length === 0) {
+            setModelsError(`No models found for ${selectedProvider}.`);
+          }
+        } catch (error) {
+          console.error(error);
+          setModelsError(error instanceof Error ? error.message : "Failed to fetch models.");
+        } finally {
+          setModelsLoading(false);
+        }
+      } else {
+        setAvailableModelsForProvider([]);
+      }
+    };
+    fetchModels();
+  }, [selectedProvider, apiKeyValidation[selectedProvider]?.status]);
+
+  useEffect(() => {
+    const model = availableModelsForProvider.find(m => m.id === selectedModelId);
+    if (model) {
+      const defaultParams = model.parameters.reduce((acc, param) => {
+        acc[param.id] = param.defaultValue;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      // Check if params are actually different before setting them
+      let isDifferent = false;
+      for (const key in defaultParams) {
+        if (modelConfigParams[key] !== defaultParams[key]) {
+          isDifferent = true;
+          break;
+        }
+      }
+      if (isDifferent) {
+        setModelConfigParams(defaultParams);
+      }
+    }
+  }, [selectedModelId, availableModelsForProvider, setModelConfigParams, modelConfigParams]);
+
   const selectedModelConfig = availableModelsForProvider.find(m => m.id === selectedModelId);
 
   return (
@@ -166,14 +247,14 @@ export const AIConfigSidebar: React.FC<AIConfigSidebarProps> = (props) => {
             {/* API Key Section */}
             <div className="space-y-4">
               <h3 className="font-semibold text-gray-200">API Keys</h3>
-              <ApiKeyInput provider={selectedProvider} {...props} />
+              <ApiKeyInput provider={selectedProvider} handleValidateKey={handleValidateKey} {...props} />
               {selectedProvider === AiProvider.OpenRouter && (
                 <div className="p-4 bg-[#212934] rounded-lg border border-[#5c6f7e]">
                    <label className="flex items-center space-x-3 cursor-pointer">
                       <input type="checkbox" checked={enableGeminiPreprocessing} onChange={(e) => setEnableGeminiPreprocessing(e.target.checked)} className="h-5 w-5 rounded text-[#c36e26] bg-[#5c6f7e] border-[#95aac0] focus:ring-[#e2a32d]" />
                       <span className="text-gray-200">Enable Gemini Preprocessing</span>
                    </label>
-                   {enableGeminiPreprocessing && <div className="mt-4"><ApiKeyInput provider={AiProvider.Google} {...props} /></div>}
+                   {enableGeminiPreprocessing && <div className="mt-4"><ApiKeyInput provider={AiProvider.Google} handleValidateKey={handleValidateKey} {...props} /></div>}
                 </div>
               )}
             </div>

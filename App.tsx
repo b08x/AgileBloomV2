@@ -5,7 +5,7 @@ import { Footer } from './components/Footer';
 import { ProviderSetupPage } from './components/ProviderSetupPage';
 import { useAgileBloomChat } from './hooks/useAgileBloomChat';
 import useAgileBloomStore from './store/useAgileBloomStore';
-import { Settings, ApiKeyStatus, ExpertRole, AiProvider } from './types';
+import { Settings, ExpertRole, AiProvider } from './types';
 import { DEFAULT_EXPERT_ROLE_NAMES, ROLE_SCRUM_LEADER } from './constants';
 import { validateApiKey } from './services/validationService';
 
@@ -58,8 +58,7 @@ const App: React.FC = () => {
 
   const [settings, setSettings] = useState<Settings>(getInitialSettings());
   
-  const [apiKeyStatus, setApiKeyStatus] = useState<ApiKeyStatus>({});
-  const [dynamicModels, setDynamicModels] = useState<Record<string, string[]>>({});
+  const [apiKeyValidation, setApiKeyValidation] = useState<Partial<Record<AiProvider, { status: 'unchecked' | 'pending' | 'valid' | 'invalid'; error?: string }>>>({});
 
   const handleSetupComplete = () => {
     setStoreSettings(settings);
@@ -72,10 +71,8 @@ const App: React.FC = () => {
       <ProviderSetupPage
         settings={settings}
         setSettings={setSettings}
-        apiKeyStatus={apiKeyStatus}
-        setApiKeyStatus={setApiKeyStatus}
-        dynamicModels={dynamicModels}
-        setDynamicModels={setDynamicModels}
+        apiKeyValidation={apiKeyValidation}
+        setApiKeyValidation={setApiKeyValidation}
         onComplete={handleSetupComplete}
       />
     );

@@ -1,9 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BrainCircuit, MessageSquareText, Play, ShieldAlert, Users, PlusCircle, Trash2, Github, Loader2, CheckCircle, XCircle, HelpCircle } from 'lucide-react';
 import useAgileBloomStore from '../store/useAgileBloomStore';
-import { fetchModelsForProvider } from '../services/modelService';
 import { AIModelConfig, AiProvider, AIConfig, ExpertRole, Expert } from '../types';
-import { validateApiKey } from '../services/validationService';
 import { listGitHubRepoFiles, fetchGitHubFilesContent } from '../services/gitService';
 import { DEFAULT_EXPERT_ROLE_NAMES, ROLE_SCRUM_LEADER } from '../constants';
 import { SetupHelpModal } from './SetupDocumentationSidebar';
@@ -21,12 +19,8 @@ export const SetupPage: React.FC<SetupPageProps> = ({ onBegin }) => {
   const { isQuotaExceeded, setQuotaExceeded, experts, addExpert, removeExpert, setCodebaseContext } = useAgileBloomStore();
 
   const [selectedProvider, setSelectedProvider] = useState<AiProvider>(AiProvider.Google);
-  const [availableModelsForProvider, setAvailableModelsForProvider] = useState<AIModelConfig[]>([]);
   const [selectedModelId, setSelectedModelId] = useState<string>('');
   
-  const [modelsLoading, setModelsLoading] = useState<boolean>(false);
-  const [modelsError, setModelsError] = useState<string | null>(null);
-
   const [modelConfigParams, setModelConfigParams] = useState<Record<string, number>>({});
   const [userApiKeys, setUserApiKeys] = useState<Partial<Record<AiProvider, string>>>({});
   const [apiKeyValidation, setApiKeyValidation] = useState<Partial<Record<AiProvider, { status: ValidationStatus; error?: string }>>>({});
@@ -41,60 +35,6 @@ export const SetupPage: React.FC<SetupPageProps> = ({ onBegin }) => {
   const [repoFetchState, setRepoFetchState] = useState<{ status: 'idle' | 'loading' | 'success' | 'error'; message: string; }>({ status: 'idle', message: '' });
 
   const [isHelpOpen, setIsHelpOpen] = useState(false);
-
-  useEffect(() => {
-    setModelsLoading(true);
-    setModelsError(null);
-    setAvailableModelsForProvider([]);
-    setSelectedModelId('');
-
-    try {
-        const models = fetchModelsForProvider(selectedProvider);
-        setAvailableModelsForProvider(models);
-        if (models.length > 0) {
-            setSelectedModelId(models[0].id);
-        } else {
-            setModelsError(`No models are available for ${selectedProvider}.`);
-        }
-    } catch (error) {
-        const message = error instanceof Error ? error.message : "An unknown error occurred while fetching models.";
-        console.error(error);
-        setModelsError(message);
-    } finally {
-        setModelsLoading(false);
-    }
-  }, [selectedProvider]);
-
-  useEffect(() => {
-    const model = availableModelsForProvider.find(m => m.id === selectedModelId);
-    if (model) {
-      const defaultParams = model.parameters.reduce((acc, param) => {
-        acc[param.id] = param.defaultValue;
-        return acc;
-      }, {} as Record<string, number>);
-      setModelConfigParams(defaultParams);
-      // Also reset API key validation when model changes, as some might have different requirements.
-      setApiKeyValidation({});
-    }
-  }, [selectedModelId, availableModelsForProvider]);
-
-  const handleValidateKey = async (provider: AiProvider) => {
-    const key = userApiKeys[provider];
-    if (!key) return;
-
-    setApiKeyValidation(prev => ({ ...prev, [provider]: { status: 'pending' } }));
-    const result = await validateApiKey(provider, key);
-    setApiKeyValidation(prev => ({ 
-      ...prev, 
-      [provider]: { 
-        status: result.isValid ? 'valid' : 'invalid',
-        error: result.error,
-      }
-    }));
-    if (!result.isValid && result.error?.toLowerCase().includes('quota')) {
-      setQuotaExceeded(true);
-    }
-  };
 
   const handleExpertSelection = (role: ExpertRole) => {
     if (role === ROLE_SCRUM_LEADER) return; // Scrum leader cannot be deselected
@@ -335,17 +275,14 @@ export const SetupPage: React.FC<SetupPageProps> = ({ onBegin }) => {
         <AIConfigSidebar 
             selectedProvider={selectedProvider}
             setSelectedProvider={setSelectedProvider}
-            availableModelsForProvider={availableModelsForProvider}
             selectedModelId={selectedModelId}
             setSelectedModelId={setSelectedModelId}
-            modelsLoading={modelsLoading}
-            modelsError={modelsError}
             modelConfigParams={modelConfigParams}
             setModelConfigParams={setModelConfigParams}
             userApiKeys={userApiKeys}
             setUserApiKeys={setUserApiKeys}
             apiKeyValidation={apiKeyValidation}
-            handleValidateKey={handleValidateKey}
+            setApiKeyValidation={setApiKeyValidation}
             isQuotaExceeded={isQuotaExceeded}
             setQuotaExceeded={setQuotaExceeded}
             enableGeminiPreprocessing={enableGeminiPreprocessing}
