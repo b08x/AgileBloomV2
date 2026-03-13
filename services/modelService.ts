@@ -189,8 +189,18 @@ export const fetchAvailableModels = async (settings: Settings): Promise<string[]
     throw error;
   }
 
-  // Add missing models to ALL_MODELS_DB
+  // Deduplicate fetchedModels by id
+  const uniqueFetchedModels: { id: string; name: string }[] = [];
+  const seenIds = new Set<string>();
   for (const model of fetchedModels) {
+    if (!seenIds.has(model.id)) {
+      seenIds.add(model.id);
+      uniqueFetchedModels.push(model);
+    }
+  }
+
+  // Add missing models to ALL_MODELS_DB
+  for (const model of uniqueFetchedModels) {
     if (!ALL_MODELS_DB.find(m => m.id === model.id)) {
       ALL_MODELS_DB.push({
         id: model.id,
@@ -210,5 +220,5 @@ export const fetchAvailableModels = async (settings: Settings): Promise<string[]
   // Update the cache for this provider
   modelCache.set(settings.provider, ALL_MODELS_DB.filter(m => m.provider === settings.provider));
 
-  return fetchedModels.map(m => m.id);
+  return uniqueFetchedModels.map(m => m.id);
 };
